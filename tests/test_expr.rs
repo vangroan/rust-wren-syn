@@ -11,5 +11,5 @@ fn test_simple() {
 
     let mut parser = Parser::new(tokens);
     let ast = parser.parse_script();
-    println!("{:?}", ast);
+    println!("{:#?}", ast);
 }

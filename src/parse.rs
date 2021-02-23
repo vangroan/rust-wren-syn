@@ -25,7 +25,7 @@ impl Parser {
     ///
     /// TODO: Confusing name. Sounds like it should be accepting script as argument.
     pub fn parse_script(mut self) -> Vec<Syntax> {
-        while !self.at_end() {
+        while !self.at_end() && self.peek().map(|t| t.ty != TokenType::EOF).unwrap_or_default() {
             self.definition();
         }
 
@@ -79,22 +79,20 @@ impl Parser {
     /// Entrypoint for the top-down precedence parser.
     ///
     /// The implementation is a straight forward Pratt parser.
-    fn parse_precedence(&mut self, precedence: Precedence) -> Option<Expr> {
-        println!("parse_precedence({})", precedence);
+    fn parse_precedence(&mut self, precedence: Precedence) -> Expr {
+        println!("parse_precedence({}) {:?}", precedence, self.peek());
 
-        let token = match self.peek() {
-            Some(t) => t,
-            None => {
-                // No tokens left, parsing done.
-                return None;
-            }
-        };
-
+        let token = self.next_token().expect("Expression expected");
         let left = self.parse_prefix(token);
 
         // Parsing the prefix should have advanced the cursor.
         let token = match self.peek() {
-            Some(t) => t,
+            Some(t) => {
+                if t.ty == TokenType::EOF {
+                    return left;
+                }
+                t
+            }
             None => {
                 // No tokens left, parsing done.
                 return left;
@@ -102,36 +100,34 @@ impl Parser {
         };
 
         self.next_token();
-        Some(self.parse_infix(left, token))
+        self.parse_infix(left, token)
     }
 
     /// Parse a prefix token in an expression.
     ///
     /// This function is analogous to a parselet.
-    fn parse_prefix(&mut self, operand: Token) -> Expr {
+    fn parse_prefix(&mut self, token: Token) -> Expr {
         use TokenType as T;
-        println!("parse_prefix {:?}", self.peek());
+        println!("parse_prefix {:?}", token);
 
-        self.next_token().map(|token| {
-            match token.ty {
-                T::Number => {
-                    println!("parse_prefix() -> NumLit");
+        match token.ty {
+            T::Number => {
+                println!("parse_prefix() -> NumLit");
 
-                    Expr::Num(NumLit {
-                        token,
-                        notation: Notation::Decimal,
-                    })
-                }
-                // When this match fails, it means there is no parselet for the token, meaning
-                // some invalid token is in an unexpected position.
-                _ => panic!("Expected expression"),
+                Expr::Num(NumLit {
+                    token,
+                    notation: Notation::Decimal,
+                })
             }
-        })
+            // When this match fails, it means there is no parselet for the token, meaning
+            // some invalid token is in an unexpected position.
+            _ => panic!("Expected expression"),
+        }
     }
 
     fn parse_infix(&mut self, left: Expr, operand: Token) -> Expr {
         use TokenType as T;
-        println!("parse_infix {:?} {:?} {:?}", left, operand, self.peek());
+        println!("parse_infix {:?} ... {:?} ... {:?}", left, operand, self.peek());
 
         // Recurse back into expression parser to handle
         // the right hand side.
