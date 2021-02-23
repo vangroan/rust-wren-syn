@@ -2,11 +2,15 @@ use itertools::{multipeek, MultiPeek};
 use smol_str::SmolStr;
 use std::str::CharIndices;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
     LeftParen,
     RightParen,
     Dot,
+    Add,
+    Sub,
+    Mul,
+    Div,
 
     Ident,
     Keyword(KeywordType),
@@ -18,25 +22,25 @@ pub enum TokenType {
     EOF,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum KeywordType {
     False,
     True,
 }
 
 /// Literal value.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Lit {
-    Number(f64),
+    Number(String),
     String(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Ident {
     pub name: SmolStr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub ty: TokenType,
     pub lit: Option<Lit>,
@@ -57,7 +61,21 @@ pub struct Span {
 }
 
 pub struct Lexer<'a> {
+    /// Iterator over UTF-8 encoded source code.
+    ///
+    /// The `MultiPeek` wrapper allows for arbitrary lookahead by consuming
+    /// the iterator internally and buffering the result. This is required
+    /// because UTF-8 characters are variable in width. Indexing the string
+    /// for individual bytes is possible, but impossible for encoded characters.
+    ///
+    /// An important semantic feature of `MultiPeek` is that peeking advances
+    /// the internal peek cursor by 1. Each call will return the next element.
+    /// The peek cursor offset is restored to 0 when calling `MultiPeek::next()`
+    /// or `MultiPeek::reset_peek()`.
     source: MultiPeek<CharIndices<'a>>,
+
+    /// Number of bytes, not characters or graphemes, in the source string.
+    source_size: usize,
 
     /// Starting position of the token that is currently being parsed.
     token_start: usize,
@@ -85,6 +103,7 @@ impl<'a> Lexer<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
             source: multipeek(source.char_indices()),
+            source_size: source.len(),
             token_start: 0,
             column_start: 1,
             current: (0, '\0'),
@@ -104,10 +123,14 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn next_token(&mut self) -> Option<Token> {
-        while self.peek_char().is_some() {
+        while !self.at_end() {
+            println!("peeked");
+            println!("current: {:?}", self.current);
             self.start_token();
 
-            if let Some((_, c)) = self.next_char() {
+            if let Some((index, c)) = self.next_char() {
+                println!("next_token: ({}, '{}')", index, c);
+
                 match c {
                     '(' => {
                         return Some(self.make_token(TokenType::LeftParen));
@@ -119,6 +142,10 @@ impl<'a> Lexer<'a> {
                         return Some(self.make_token(TokenType::Dot));
                     }
                     '"' => return self.consume_string(TokenType::String),
+                    '+' => return Some(self.make_token(TokenType::Add)),
+                    '-' => return Some(self.make_token(TokenType::Sub)),
+                    '*' => return Some(self.make_token(TokenType::Mul)),
+                    '/' => return Some(self.make_token(TokenType::Div)),
                     '\n' => {
                         return Some(self.make_token(TokenType::Newline));
                     }
@@ -126,13 +153,20 @@ impl<'a> Lexer<'a> {
                         self.consume_whitespace();
                     }
                     _ => {
-                        if Self::is_ident(c) {
+                        if Self::is_digit(c) {
+                            return Some(self.consume_number(TokenType::Number));
+                        } else if Self::is_ident(c) {
                             return Some(self.consume_ident(TokenType::Ident));
                         } else {
                             // TODO: Error
+                            // error: unknown start of token: {}
+                            panic!("error: unknown character");
                         }
                     }
                 }
+            } else {
+                self.current.0 = self.source_size + 1;
+                return Some(self.make_token(TokenType::EOF));
             }
         }
 
@@ -141,6 +175,8 @@ impl<'a> Lexer<'a> {
 
     fn next_char(&mut self) -> Option<(usize, char)> {
         if let Some((index, c)) = self.source.next() {
+            println!("next_char ({}, '{}')", index, c);
+
             if c == '\n' {
                 self.current_column += 1;
                 self.current_line += 1;
@@ -150,13 +186,28 @@ impl<'a> Lexer<'a> {
             self.current = (index, c);
             Some((index, c))
         } else {
+            // Source code iterator has reached end-of-file.
+            //
+            // Set the current index to the size of the source
+            // string. There is no End-of-file character, so
+            // we just set it to the null-byte.
+            self.current = (self.source_size, '\0');
             None
         }
     }
 
+    /// Peeks the current character in the stream.
+    ///
+    /// This call advances the peek cursor. Subsequent
+    /// calls will look ahead by one character each call.
     #[inline]
     fn peek_char(&mut self) -> Option<(usize, char)> {
         self.source.peek().cloned()
+    }
+
+    /// Reset the stream peek cursor.
+    fn reset_peek(&mut self) {
+        self.source.reset_peek()
     }
 
     fn start_token(&mut self) {
@@ -165,6 +216,8 @@ impl<'a> Lexer<'a> {
     }
 
     fn make_token(&mut self, token_ty: TokenType) -> Token {
+        println!("make_token: {:?} {:?}", self.current, token_ty);
+
         let ident = if token_ty == TokenType::Ident {
             // Identifier name was consumed and stored in the buffer.
             let name = self.drain_buffer();
@@ -173,11 +226,11 @@ impl<'a> Lexer<'a> {
             None
         };
 
-        // String literal
-        let lit = if token_ty == TokenType::String {
-            Some(Lit::String(self.buf.clone()))
-        } else {
-            None
+        // Literals
+        let lit = match token_ty {
+            TokenType::String => Some(Lit::String(self.buf.clone())),
+            TokenType::Number => Some(Lit::Number(self.buf.clone())),
+            _ => None,
         };
 
         // Build span.
@@ -202,7 +255,7 @@ impl<'a> Lexer<'a> {
         (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
     }
 
-    fn is_number(c: char) -> bool {
+    fn is_digit(c: char) -> bool {
         c >= '0' && c <= '9'
     }
 
@@ -210,7 +263,7 @@ impl<'a> Lexer<'a> {
         self.start_buffer();
 
         while let Some((_, c)) = self.peek_char() {
-            if Self::is_ident(c) || Self::is_number(c) {
+            if Self::is_ident(c) || Self::is_digit(c) {
                 self.buf.push(c);
                 self.next_char();
             } else {
@@ -225,6 +278,9 @@ impl<'a> Lexer<'a> {
     fn consume_string(&mut self, token_ty: TokenType) -> Option<Token> {
         // Exclude the first quote character from literal.
         self.buf.clear();
+
+        // Ensure clean peek state.
+        self.reset_peek();
 
         loop {
             if let Some((_, c)) = self.peek_char() {
@@ -245,21 +301,72 @@ impl<'a> Lexer<'a> {
         Some(self.make_token(token_ty))
     }
 
+    fn consume_number(&mut self, token_ty: TokenType) -> Token {
+        self.start_buffer();
+
+        // Ensure clean peek state.
+        self.reset_peek();
+
+        // Consume tokens of the number literal until we
+        // encounter a character that's invalid for any
+        // of the supported numeral notations.
+        loop {
+            match self.peek_char() {
+                Some((_, c)) => {
+                    // TODO: Support numeral notations like binary '0b...', hex '0x..', etc.
+                    if Self::is_digit(c) {
+                        // Check is performed on peeked char
+                        // because we don't want to consume
+                        // something that terminates the numeral,
+                        // eg. whitespace.
+                        self.next_char();
+                    } else {
+                        break;
+                    }
+                }
+                None => {
+                    // Reached end of file.
+                    break;
+                }
+            }
+        }
+
+        self.make_token(token_ty)
+    }
+
+    /// Consumes whitespace, excluding new lines, until a non-whitespace
+    /// character is encountered.
+    ///
+    /// New lines are statement terminator tokens in Wren, and shouldn't
+    /// be ignored.
     fn consume_whitespace(&mut self) {
         while let Some((_, ' ')) | Some((_, '\t')) | Some((_, '\r')) = self.peek_char() {
             self.next_char();
         }
     }
 
+    /// Clears the buffer and pushes the current character onto it.
     fn start_buffer(&mut self) {
         self.buf.clear();
         self.buf.push(self.current.1);
     }
 
+    /// Clears the buffer and returns the result.
     fn drain_buffer(&mut self) -> SmolStr {
         let s = SmolStr::new(&self.buf);
         self.buf.clear();
         s
+    }
+
+    /// Indicates that the character stream cursor is at the end.
+    ///
+    /// Important note about MultiPeek, when the iterator is at
+    /// the last position, peek will return `None` instead of
+    /// the final element.
+    fn at_end(&self) -> bool {
+        // Exclusive because source size is used a marker to
+        // return an End-of-File token.
+        self.current.0 > self.source_size
     }
 }
 
@@ -323,6 +430,16 @@ mod test {
     fn test_lex_from_string() {
         let source = String::from("System.print(\"Hello, world!\")");
         let lexer = Lexer::new(&source);
-        assert_eq!(lexer.into_tokens().len(), 6);
+        assert_eq!(lexer.into_tokens().len(), 7);
+    }
+
+    #[test]
+    fn test_lex_number_lit() {
+        let mut lexer = Lexer::new("1 + 2 * 3");
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Add));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Mul));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
     }
 }
