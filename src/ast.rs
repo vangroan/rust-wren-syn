@@ -6,6 +6,15 @@ pub enum Syntax {
     Expr(Expr),
 }
 
+impl Syntax {
+    pub fn expr(&self) -> Option<&Expr> {
+        match self {
+            Syntax::Expr(expr) => Some(expr),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Stmt {}
 
@@ -14,6 +23,22 @@ pub enum Expr {
     Num(NumLit),
     UnOp(UnaryOp),
     BinOp(BinaryOp),
+}
+
+impl Expr {
+    pub fn number(&self) -> Option<&NumLit> {
+        match self {
+            Expr::Num(number) => Some(number),
+            _ => None,
+        }
+    }
+
+    pub fn binary(&self) -> Option<&BinaryOp> {
+        match self {
+            Expr::BinOp(binary) => Some(binary),
+            _ => None,
+        }
+    }
 }
 
 /// Number literal.

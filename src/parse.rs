@@ -1,7 +1,7 @@
 use crate::{
     ast::{Expr, Notation, Syntax},
     lex::{Token, TokenType},
-    BinaryOp, NumLit,
+    BinaryOp, NumLit, UnaryOp,
 };
 
 type Precedence = i16;
@@ -83,24 +83,20 @@ impl Parser {
         println!("parse_precedence({}) {:?}", precedence, self.peek());
 
         let token = self.next_token().expect("Expression expected");
-        let left = self.parse_prefix(token);
+        let mut left = Some(self.parse_prefix(token));
 
-        // Parsing the prefix should have advanced the cursor.
-        let token = match self.peek() {
-            Some(t) => {
-                if t.ty == TokenType::EOF {
-                    return left;
-                }
-                t
+        while precedence <= self.peek_precedence() {
+            // There is no expression right of the last one, so we
+            // just return what we have.
+            if let Some(TokenType::EOF) | None = self.peek().map(|token| token.ty) {
+                return left.unwrap();
             }
-            None => {
-                // No tokens left, parsing done.
-                return left;
-            }
-        };
 
-        self.next_token();
-        self.parse_infix(left, token)
+            let token = self.next_token().unwrap();
+            left = Some(self.parse_infix(left.take().unwrap(), token))
+        }
+
+        left.take().unwrap()
     }
 
     /// Parse a prefix token in an expression.
@@ -119,6 +115,16 @@ impl Parser {
                     notation: Notation::Decimal,
                 })
             }
+            T::Sub => {
+                // Negate
+                println!("parse_prefix() -> UnaryOp {{ operator: TokenType::Sub }}");
+                let precedence = Self::precedence(token.ty);
+                let right = self.parse_precedence(precedence);
+                Expr::UnOp(UnaryOp {
+                    operand: token,
+                    rhs: Box::new(right),
+                })
+            }
             // When this match fails, it means there is no parselet for the token, meaning
             // some invalid token is in an unexpected position.
             _ => panic!("Expected expression"),
@@ -129,12 +135,14 @@ impl Parser {
         use TokenType as T;
         println!("parse_infix {:?} ... {:?} ... {:?}", left, operand, self.peek());
 
+        let precedence = Self::precedence(operand.ty);
+
         // Recurse back into expression parser to handle
         // the right hand side.
         //
         // The left hand side will wait for us here on
         // the call stack.
-        let right = self.parse_precedence(0);
+        let right = self.parse_precedence(precedence);
 
         match operand.ty {
             T::Add | T::Sub | T::Mul | T::Div => Expr::BinOp(BinaryOp {
@@ -144,6 +152,24 @@ impl Parser {
             }),
             _ => panic!("Expected expression"),
         }
+    }
+
+    /// Get the precedence of the given token type in the context
+    /// of the expression parser.
+    fn precedence(token_ty: TokenType) -> Precedence {
+        use TokenType as T;
+
+        match token_ty {
+            T::Number => 0,
+            T::Add | T::Sub => 14,
+            T::Mul | T::Div => 15,
+            _ => 0,
+        }
+    }
+
+    /// Retrieve the precedence of the current token.
+    fn peek_precedence(&self) -> Precedence {
+        self.peek().map(|token| Self::precedence(token.ty)).unwrap_or_else(|| 0)
     }
 
     /// Consumes the current token regardless of type.
