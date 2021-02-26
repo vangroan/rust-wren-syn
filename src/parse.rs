@@ -3,8 +3,83 @@ use crate::{
     lex::{Token, TokenType},
     BinaryOp, NumLit, UnaryOp,
 };
+use std::convert::{Infallible, TryFrom};
+use std::{fmt, ops};
 
-type Precedence = i16;
+// type Precedence = i16;
+
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+enum Precedence {
+    None = 0,
+    Lowest = 1,
+    Assignment = 2,    // =
+    Conditional = 3,   // ?:
+    LogicalOr = 4,     // ||
+    LogicalAnd = 5,    // &&
+    Equality = 6,      // == !=
+    Is = 7,            // is
+    Comparison = 8,    // < > <= >=
+    BitwiseOr = 9,     // |
+    BitwiseXor = 10,   // ^
+    BitwiseAnd = 11,   // &
+    BitwiseShift = 12, // << >>
+    Range = 13,        // .. ...
+    Term = 14,         // + -
+    Factor = 15,       // * / %
+    Unary = 16,        // - ! ~
+    Call = 17,         // . () []
+    Primary = 18,
+}
+
+impl Precedence {
+    #[inline(always)]
+    fn as_i32(&self) -> i32 {
+        *self as i32
+    }
+}
+
+impl TryFrom<i32> for Precedence {
+    type Error = Infallible;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Precedence::None),
+            1 => Ok(Precedence::Lowest),
+            2 => Ok(Precedence::Assignment),
+            3 => Ok(Precedence::Conditional),
+            4 => Ok(Precedence::LogicalOr),
+            5 => Ok(Precedence::LogicalAnd),
+            6 => Ok(Precedence::Equality),
+            7 => Ok(Precedence::Is),
+            8 => Ok(Precedence::Comparison),
+            9 => Ok(Precedence::BitwiseOr),
+            10 => Ok(Precedence::BitwiseXor),
+            11 => Ok(Precedence::BitwiseAnd),
+            12 => Ok(Precedence::BitwiseShift),
+            13 => Ok(Precedence::Range),
+            14 => Ok(Precedence::Term),
+            15 => Ok(Precedence::Factor),
+            16 => Ok(Precedence::Unary),
+            17 => Ok(Precedence::Call),
+            18 => Ok(Precedence::Primary),
+            _ => Ok(Precedence::Primary),
+        }
+    }
+}
+
+impl fmt::Display for Precedence {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Display::fmt(&self.as_i32(), f)
+    }
+}
+
+impl ops::Add<i32> for Precedence {
+    type Output = Precedence;
+
+    fn add(self, rhs: i32) -> Self::Output {
+        Precedence::try_from(self.as_i32() + rhs).unwrap()
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -80,7 +155,7 @@ impl Parser {
         println!("expression");
 
         // Pratt parser is initialised with lowest possible precedence.
-        self.parse_precedence(0)
+        self.parse_precedence(Precedence::None)
     }
 
     /// Entrypoint for the top-down precedence parser.
@@ -190,16 +265,18 @@ impl Parser {
         use TokenType as T;
 
         match token_ty {
-            T::Number => 0,
-            T::Add | T::Sub => 14,
-            T::Mul | T::Div => 15,
-            _ => 0,
+            T::Number => Precedence::None,
+            T::Add | T::Sub => Precedence::Term,
+            T::Mul | T::Div => Precedence::Factor,
+            _ => Precedence::None,
         }
     }
 
     /// Retrieve the precedence of the current token.
     fn peek_precedence(&self) -> Precedence {
-        self.peek().map(|token| Self::precedence(token.ty)).unwrap_or_else(|| 0)
+        self.peek()
+            .map(|token| Self::precedence(token.ty))
+            .unwrap_or_else(|| Precedence::None)
     }
 
     /// Consumes the current token regardless of type.

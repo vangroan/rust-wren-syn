@@ -61,3 +61,25 @@ fn test_precedence() {
     let three = add.rhs.number().unwrap();
     assert_eq!(three.token.ty, TokenType::Number);
 }
+
+/// Simple `1 + 2 - 3` test case.
+///
+/// The operators `+` and `-` have the same precedence,
+/// and left-associativity. The operand in the middle,
+/// `_ + 2 - _` is bound to the left operator tighter
+/// than the right.
+///
+/// Expected grouping of syntax nodes is `(1 + 2) - 3`.
+///
+/// If the result is `1 + (2 - 3)` then the operators
+/// were incorrectly parsed with right-associativity.
+#[test]
+fn test_associativity() {
+    let lexer = Lexer::from_str("1 + 2 - 3");
+    let tokens = lexer.into_tokens();
+    println!("{:?}", tokens);
+
+    let parser = Parser::new(tokens);
+    let ast = parser.parse_script();
+    println!("{:#?}", ast);
+}
