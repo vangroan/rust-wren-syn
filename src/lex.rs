@@ -1,11 +1,16 @@
 use itertools::{multipeek, MultiPeek};
 use smol_str::SmolStr;
+use std::convert::TryFrom;
 use std::str::CharIndices;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
-    LeftParen,
-    RightParen,
+    LeftParen,    // (
+    RightParen,   // )
+    LeftBracket,  // [
+    RightBracket, // ]
+    LeftBrace,    // {
+    RightBrace,   // }
     Dot,
     Add,
     Sub,
@@ -17,6 +22,17 @@ pub enum TokenType {
 
     Number,
     String,
+    Interpolated,
+
+    /// Code comment that starts with `//`
+    CommentLine,
+    /// Opening comment `/*`
+    CommentLeft,
+    /// Closing comment `*/`
+    CommentRight,
+    /// Contents of a comment block, between the
+    /// `/*` and `*/`.
+    Comment,
 
     Newline,
     EOF,
@@ -24,8 +40,40 @@ pub enum TokenType {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum KeywordType {
+    Break,
+    Class,
+    Continue,
     False,
+    For,
+    Foreign,
+    If,
+    Return,
+    Static,
+    Var,
     True,
+    While,
+}
+
+impl<'a> TryFrom<&'a str> for KeywordType {
+    type Error = ();
+
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        match value {
+            "break" => Ok(KeywordType::Break),
+            "class" => Ok(KeywordType::Class),
+            "continue" => Ok(KeywordType::Continue),
+            "false" => Ok(KeywordType::False),
+            "for" => Ok(KeywordType::For),
+            "foreign" => Ok(KeywordType::Foreign),
+            "if" => Ok(KeywordType::If),
+            "return" => Ok(KeywordType::Return),
+            "static" => Ok(KeywordType::Static),
+            "var" => Ok(KeywordType::Var),
+            "true" => Ok(KeywordType::True),
+            "while" => Ok(KeywordType::While),
+            _ => Err(()),
+        }
+    }
 }
 
 /// Literal value.
@@ -33,6 +81,17 @@ pub enum KeywordType {
 pub enum Lit {
     Number(String),
     String(String),
+    Comment(String),
+}
+
+impl Lit {
+    pub fn to_string(&self) -> String {
+        match self {
+            Lit::Number(s) => s.clone(),
+            Lit::String(s) => s.clone(),
+            Lit::Comment(s) => s.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -138,6 +197,18 @@ impl<'a> Lexer<'a> {
                     ')' => {
                         return Some(self.make_token(TokenType::RightParen));
                     }
+                    '[' => {
+                        return Some(self.make_token(TokenType::LeftBracket));
+                    }
+                    ']' => {
+                        return Some(self.make_token(TokenType::RightBracket));
+                    }
+                    '{' => {
+                        return Some(self.make_token(TokenType::LeftBrace));
+                    }
+                    '}' => {
+                        return Some(self.make_token(TokenType::RightBrace));
+                    }
                     '.' => {
                         return Some(self.make_token(TokenType::Dot));
                     }
@@ -145,7 +216,19 @@ impl<'a> Lexer<'a> {
                     '+' => return Some(self.make_token(TokenType::Add)),
                     '-' => return Some(self.make_token(TokenType::Sub)),
                     '*' => return Some(self.make_token(TokenType::Mul)),
-                    '/' => return Some(self.make_token(TokenType::Div)),
+                    '/' => {
+                        if let Some((_, next_char)) = self.peek_char() {
+                            if next_char == '/' {
+                                // Exclude the '//' from the comment literal.
+                                self.next_char();
+                                return Some(self.consume_comment_line(TokenType::CommentLine));
+                            } else if next_char == '*' {
+                                // Comment block
+                                return Some(self.consume_comment_block());
+                            };
+                        }
+                        return Some(self.make_token(TokenType::Div));
+                    }
                     '\n' => {
                         return Some(self.make_token(TokenType::Newline));
                     }
@@ -218,7 +301,7 @@ impl<'a> Lexer<'a> {
     fn make_token(&mut self, token_ty: TokenType) -> Token {
         println!("make_token: {:?} {:?}", self.current, token_ty);
 
-        let ident = if token_ty == TokenType::Ident {
+        let ident = if token_ty == TokenType::Ident || matches!(token_ty, TokenType::Keyword(_)) {
             // Identifier name was consumed and stored in the buffer.
             let name = self.drain_buffer();
             Some(Ident { name })
@@ -230,6 +313,7 @@ impl<'a> Lexer<'a> {
         let lit = match token_ty {
             TokenType::String => Some(Lit::String(self.buf.clone())),
             TokenType::Number => Some(Lit::Number(self.buf.clone())),
+            TokenType::CommentLine => Some(Lit::Comment(self.buf.clone())),
             _ => None,
         };
 
@@ -255,6 +339,7 @@ impl<'a> Lexer<'a> {
         (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
     }
 
+    /// Checks whether the given character is valid for a number.
     fn is_digit(c: char) -> bool {
         c >= '0' && c <= '9'
     }
@@ -271,8 +356,13 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        // TODO: If the buffer contains a known keyword, change token type to Keyword
-        self.make_token(token_ty)
+        // If the identifier matches a known keyword, the
+        // token type is changed.
+        if let Ok(keyword) = KeywordType::try_from(self.buf.as_str()) {
+            self.make_token(TokenType::Keyword(keyword))
+        } else {
+            self.make_token(token_ty)
+        }
     }
 
     fn consume_string(&mut self, token_ty: TokenType) -> Option<Token> {
@@ -343,6 +433,46 @@ impl<'a> Lexer<'a> {
         while let Some((_, ' ')) | Some((_, '\t')) | Some((_, '\r')) = self.peek_char() {
             self.next_char();
         }
+    }
+
+    /// Consumes the contents of a line comment, excluding the
+    /// preceding '//'.
+    fn consume_comment_line(&mut self, token_ty: TokenType) -> Token {
+        println!("consume_comment_line");
+        self.buf.clear();
+
+        // Ensure clean peek state.
+        self.reset_peek();
+
+        loop {
+            match self.peek_char() {
+                Some((_, c)) => {
+                    // Comment is anything until new line.
+                    if c == '\n' || c == '\0' {
+                        // But don't consume the next character,
+                        // we don't want the new line in the comment.
+                        //
+                        // It will be handled by the next iteration of
+                        // the lexer loop and go into the token stream
+                        // as a `Newline` token.
+                        break;
+                    }
+
+                    self.buf.push(c);
+                    self.next_char();
+                }
+                None => {
+                    // Reached end of file.
+                    break;
+                }
+            }
+        }
+
+        self.make_token(token_ty)
+    }
+
+    fn consume_comment_block(&mut self) -> Token {
+        todo!()
     }
 
     /// Clears the buffer and pushes the current character onto it.
@@ -441,5 +571,72 @@ mod test {
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Mul));
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
+    }
+
+    /// Div uses slash like line comment, so can be affect by comment lexing bugs.
+    #[test]
+    fn test_lex_div() {
+        let mut lexer = Lexer::from_str("1 / 2 / 3");
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Div));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Div));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
+    }
+
+    #[test]
+    fn test_comment_line() {
+        let mut lexer = Lexer::from_str(
+            r#"
+        // a a a
+        // b b b
+        "#,
+        );
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Newline));
+
+        let comment_1 = lexer.next_token().unwrap();
+        assert_eq!(comment_1.ty, TokenType::CommentLine);
+        assert_eq!(&comment_1.lit.unwrap().to_string(), " a a a");
+
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Newline));
+
+        let comment_1 = lexer.next_token().unwrap();
+        assert_eq!(comment_1.ty, TokenType::CommentLine);
+        assert_eq!(&comment_1.lit.unwrap().to_string(), " b b b");
+
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Newline));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::EOF));
+    }
+
+    #[test]
+    fn test_keywords() {
+        let mut lexer = Lexer::from_str(
+            r#"class Foo {}
+        var bar
+        "#,
+        );
+
+        let keyword_class = lexer.next_token().unwrap();
+        assert_eq!(keyword_class.ty, TokenType::Keyword(KeywordType::Class));
+        assert_eq!(keyword_class.ident.unwrap().name.as_str(), "class");
+
+        let ident_foo = lexer.next_token().unwrap();
+        assert_eq!(ident_foo.ty, TokenType::Ident);
+        assert_eq!(ident_foo.ident.unwrap().name.as_str(), "Foo");
+
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::LeftBrace));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::RightBrace));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Newline));
+
+        let keyword_var = lexer.next_token().unwrap();
+        assert_eq!(keyword_var.ty, TokenType::Keyword(KeywordType::Var));
+        assert_eq!(keyword_var.ident.unwrap().name.as_str(), "var");
+
+        let ident_bar = lexer.next_token().unwrap();
+        assert_eq!(ident_bar.ty, TokenType::Ident);
+        assert_eq!(ident_bar.ident.unwrap().name.as_str(), "bar");
+
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Newline));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::EOF));
     }
 }
