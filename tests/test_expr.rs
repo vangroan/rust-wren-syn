@@ -1,15 +1,15 @@
 //! Test expression parsing.
 
-use rust_wren_syn::{BinaryOp, Expr, Lexer, Parser, Syntax, TokenType};
+use rust_wren_syn::{Lexer, Parser, TokenType};
 
 /// Simple 1 + 2 * 3 test case.
 #[test]
 fn test_simple() {
-    let mut lexer = Lexer::new("1 + 2 * 3");
+    let lexer = Lexer::from_str("1 + 2 * 3");
     let tokens = lexer.into_tokens();
     println!("{:?}", tokens);
 
-    let mut parser = Parser::new(tokens);
+    let parser = Parser::new(tokens);
     let ast = parser.parse_script();
     println!("{:#?}", ast);
 
@@ -38,11 +38,11 @@ fn test_simple() {
 /// not working correctly.
 #[test]
 fn test_precedence() {
-    let mut lexer = Lexer::new("1 * 2 + 3");
+    let lexer = Lexer::from_str("1 * 2 + 3");
     let tokens = lexer.into_tokens();
     println!("{:?}", tokens);
 
-    let mut parser = Parser::new(tokens);
+    let parser = Parser::new(tokens);
     let ast = parser.parse_script();
     println!("{:#?}", ast);
 

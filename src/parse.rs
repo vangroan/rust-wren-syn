@@ -6,6 +6,13 @@ use crate::{
 
 type Precedence = i16;
 
+#[allow(dead_code)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+enum Associativity {
+    Left,
+    Right,
+}
+
 pub struct Parser {
     tokens: Vec<Token>,
     cursor: usize,
@@ -119,7 +126,7 @@ impl Parser {
                 // Negate
                 println!("parse_prefix() -> UnaryOp {{ operator: TokenType::Sub }}");
                 let precedence = Self::precedence(token.ty);
-                let right = self.parse_precedence(precedence);
+                let right = self.parse_precedence(precedence + 1);
                 Expr::UnOp(UnaryOp {
                     operand: token,
                     rhs: Box::new(right),
@@ -137,12 +144,28 @@ impl Parser {
 
         let precedence = Self::precedence(operand.ty);
 
+        // Associativity is handled by adjusting the precedence.
+        // Left associativity is achieved by increasing the precedence
+        // by 1. This increases the threshold that any infix expressions
+        // to our right must exceed.
+        //
+        // Right associativity can be achieved by keeping
+        // the precedence the same, thus keeping the threshold any
+        // subsequent infix expression need to exceed to be parsed.
+        //
+        // Wren doesn't appear to have right-associative operators.
+        let associativity = if Self::associativity(operand.ty) == Associativity::Left {
+            1
+        } else {
+            0
+        };
+
         // Recurse back into expression parser to handle
         // the right hand side.
         //
         // The left hand side will wait for us here on
         // the call stack.
-        let right = self.parse_precedence(precedence);
+        let right = self.parse_precedence(precedence + associativity);
 
         match operand.ty {
             T::Add | T::Sub | T::Mul | T::Div => Expr::BinOp(BinaryOp {
@@ -152,6 +175,13 @@ impl Parser {
             }),
             _ => panic!("Expected expression"),
         }
+    }
+
+    /// Associativity is the precedence tie-breaker.
+    ///
+    /// Wren doesn't seem to have any right-associative operators.
+    fn associativity(_token_ty: TokenType) -> Associativity {
+        Associativity::Left
     }
 
     /// Get the precedence of the given token type in the context

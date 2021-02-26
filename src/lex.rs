@@ -100,7 +100,7 @@ impl<'a> Lexer<'a> {
     /// Creates a new `Lexer` for the given string.
     ///
     /// Returns `None` when the string is empty.
-    pub fn new(source: &'a str) -> Self {
+    pub fn from_str(source: &'a str) -> Self {
         Self {
             source: multipeek(source.char_indices()),
             source_size: source.len(),
@@ -398,7 +398,7 @@ mod test {
 
     #[test]
     fn test_lexer_next_char() {
-        let mut lexer = Lexer::new("System.print(\"Hello, world!\")");
+        let mut lexer = Lexer::from_str("System.print(\"Hello, world!\")");
         let chars = [(0, 'S'), (1, 'y'), (2, 's'), (3, 't'), (4, 'e'), (5, 'm'), (6, '.')];
         for (index, c) in &chars {
             assert_eq!(lexer.next_char(), Some((*index, *c)));
@@ -407,7 +407,7 @@ mod test {
 
     #[test]
     fn test_lexer_next_token() {
-        let mut lexer = Lexer::new("System.print(\"Hello, world!\")");
+        let mut lexer = Lexer::from_str("System.print(\"Hello, world!\")");
 
         println!("{:#?}", lexer.next_token());
         println!("{:#?}", lexer.next_token());
@@ -429,13 +429,13 @@ mod test {
     #[test]
     fn test_lex_from_string() {
         let source = String::from("System.print(\"Hello, world!\")");
-        let lexer = Lexer::new(&source);
+        let lexer = Lexer::from_str(&source);
         assert_eq!(lexer.into_tokens().len(), 7);
     }
 
     #[test]
     fn test_lex_number_lit() {
-        let mut lexer = Lexer::new("1 + 2 * 3");
+        let mut lexer = Lexer::from_str("1 + 2 * 3");
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Add));
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
