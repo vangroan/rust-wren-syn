@@ -61,14 +61,14 @@ pub enum Notation {
 /// Arithmetic operation with an expression on the right side.
 #[derive(Debug)]
 pub struct UnaryOp {
-    pub operand: Token,
+    pub operator: Token,
     pub rhs: Box<Expr>,
 }
 
 /// Arithmetic operation with an expression on either side.
 #[derive(Debug)]
 pub struct BinaryOp {
-    pub operand: Token,
+    pub operator: Token,
     pub lhs: Box<Expr>,
     pub rhs: Box<Expr>,
 }

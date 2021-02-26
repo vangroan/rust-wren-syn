@@ -14,13 +14,13 @@ fn test_simple() {
     println!("{:#?}", ast);
 
     let add = ast.first().unwrap().expr().unwrap().binary().unwrap();
-    assert_eq!(add.operand.ty, TokenType::Add);
+    assert_eq!(add.operator.ty, TokenType::Add);
 
     let one = add.lhs.number().unwrap();
     assert_eq!(one.token.ty, TokenType::Number);
 
     let mul = add.rhs.binary().unwrap();
-    assert_eq!(mul.operand.ty, TokenType::Mul);
+    assert_eq!(mul.operator.ty, TokenType::Mul);
 
     let two = mul.lhs.number().unwrap();
     assert_eq!(two.token.ty, TokenType::Number);
@@ -47,10 +47,10 @@ fn test_precedence() {
     println!("{:#?}", ast);
 
     let add = ast.first().unwrap().expr().unwrap().binary().unwrap();
-    assert_eq!(add.operand.ty, TokenType::Add);
+    assert_eq!(add.operator.ty, TokenType::Add);
 
     let mul = add.lhs.binary().unwrap();
-    assert_eq!(mul.operand.ty, TokenType::Mul);
+    assert_eq!(mul.operator.ty, TokenType::Mul);
 
     let one = mul.lhs.number().unwrap();
     assert_eq!(one.token.ty, TokenType::Number);

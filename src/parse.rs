@@ -203,7 +203,7 @@ impl Parser {
                 let precedence = Self::precedence(token.ty);
                 let right = self.parse_precedence(precedence + 1);
                 Expr::UnOp(UnaryOp {
-                    operand: token,
+                    operator: token,
                     rhs: Box::new(right),
                 })
             }
@@ -213,11 +213,11 @@ impl Parser {
         }
     }
 
-    fn parse_infix(&mut self, left: Expr, operand: Token) -> Expr {
+    fn parse_infix(&mut self, left: Expr, token: Token) -> Expr {
         use TokenType as T;
-        println!("parse_infix {:?} ... {:?} ... {:?}", left, operand, self.peek());
+        println!("parse_infix {:?} ... {:?} ... {:?}", left, token, self.peek());
 
-        let precedence = Self::precedence(operand.ty);
+        let precedence = Self::precedence(token.ty);
 
         // Associativity is handled by adjusting the precedence.
         // Left associativity is achieved by increasing the precedence
@@ -229,7 +229,7 @@ impl Parser {
         // subsequent infix expression need to exceed to be parsed.
         //
         // Wren doesn't appear to have right-associative operators.
-        let associativity = if Self::associativity(operand.ty) == Associativity::Left {
+        let associativity = if Self::associativity(token.ty) == Associativity::Left {
             1
         } else {
             0
@@ -242,9 +242,9 @@ impl Parser {
         // the call stack.
         let right = self.parse_precedence(precedence + associativity);
 
-        match operand.ty {
+        match token.ty {
             T::Add | T::Sub | T::Mul | T::Div => Expr::BinOp(BinaryOp {
-                operand,
+                operator: token,
                 lhs: Box::new(left),
                 rhs: Box::new(right),
             }),
