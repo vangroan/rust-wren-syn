@@ -51,6 +51,7 @@ pub enum KeywordType {
     For,
     Foreign,
     If,
+    Is,
     Return,
     Static,
     Var,
@@ -58,6 +59,7 @@ pub enum KeywordType {
     While,
 }
 
+// TODO: Replace with from_str
 impl<'a> TryFrom<&'a str> for KeywordType {
     type Error = ();
 
@@ -70,6 +72,7 @@ impl<'a> TryFrom<&'a str> for KeywordType {
             "for" => Ok(KeywordType::For),
             "foreign" => Ok(KeywordType::Foreign),
             "if" => Ok(KeywordType::If),
+            "is" => Ok(KeywordType::Is),
             "return" => Ok(KeywordType::Return),
             "static" => Ok(KeywordType::Static),
             "var" => Ok(KeywordType::Var),

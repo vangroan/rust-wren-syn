@@ -1,8 +1,9 @@
-use crate::token::Token;
+use crate::token::{Ident, Token};
 
 #[derive(Debug)]
 pub enum Syntax {
     Stmts(Vec<Stmt>),
+    Stmt(Stmt),
     Expr(Expr),
 }
 
@@ -16,7 +17,28 @@ impl Syntax {
 }
 
 #[derive(Debug)]
-pub struct Stmt {}
+pub enum Stmt {
+    /// Definition statement.
+    Def(Def),
+    /// Expression statement.
+    Expr,
+}
+
+/// Definition statement.
+#[derive(Debug)]
+pub enum Def {
+    Class(ClassDef),
+}
+
+#[derive(Debug)]
+pub struct ClassDef {
+    /// Class name.
+    pub ident: Ident,
+    /// Base class that this class is inheriting from.
+    pub parent: Option<Ident>,
+    /// TODO: Member methods.
+    pub members: Vec<()>,
+}
 
 #[derive(Debug)]
 pub enum Expr {

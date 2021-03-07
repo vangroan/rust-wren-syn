@@ -2,8 +2,9 @@ use std::convert::{Infallible, TryFrom};
 use std::{fmt, ops};
 
 use crate::{
-    ast::{Expr, Notation, Syntax},
-    token::{Token, TokenType},
+    ast::{self, Expr, Notation, Syntax},
+    errors::ParseError,
+    token::{KeywordType, Token, TokenType},
     BinaryOp, NumLit, UnaryOp,
 };
 
@@ -138,12 +139,57 @@ impl Parser {
     /// branches that do not have curly braces.
     fn definition(&mut self) {
         println!("definition");
-        // TODO: Class
-        // TODO: Foreign
-        // TODO: Import
-        // TODO: Var
-        // Else: Simple Statement
-        self.statement();
+        if let Some(token) = self.peek() {
+            if let TokenType::Keyword(keyword) = token.ty {
+                match keyword {
+                    KeywordType::Class => {
+                        let class_def = self.class_definition().expect("parse definition failed");
+                        self.statements
+                            .push(ast::Syntax::Stmt(ast::Stmt::Def(ast::Def::Class(class_def))));
+                    }
+                    // TODO: Foreign
+                    // TODO: Import
+                    // TODO: Var
+                    // Else: Simple Statement
+                    _ => todo!("{:?} definition statement not implemented yet", keyword),
+                }
+            } else {
+                self.statement();
+            }
+        }
+    }
+
+    fn class_definition(&mut self) -> Result<ast::ClassDef, ParseError> {
+        println!("class_definition");
+
+        // Consume keyword
+        self.next_token();
+
+        if let Some(token) = self.consume(TokenType::Ident) {
+            if token.ty != TokenType::Ident {
+                return Err(ParseError {
+                    msg: "class name expected".to_string(),
+                });
+            }
+
+            if let Some(ident) = token.ident {
+                // TODO: Check if next is keyword `is`.
+                Ok(ast::ClassDef {
+                    ident,
+                    // TODO: Parent class
+                    parent: None,
+                    members: vec![],
+                })
+            } else {
+                Err(ParseError {
+                    msg: "class name expected".to_string(),
+                })
+            }
+        } else {
+            Err(ParseError {
+                msg: "expected end of file".to_string(),
+            })
+        }
     }
 
     /// Parse a simple statement.
