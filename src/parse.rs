@@ -1,10 +1,11 @@
-use crate::{
-    ast::{Expr, Notation, Syntax},
-    lex::{Token, TokenType},
-    BinaryOp, NumLit, UnaryOp,
-};
 use std::convert::{Infallible, TryFrom};
 use std::{fmt, ops};
+
+use crate::{
+    ast::{Expr, Notation, Syntax},
+    token::{Token, TokenType},
+    BinaryOp, NumLit, UnaryOp,
+};
 
 // type Precedence = i16;
 
@@ -40,7 +41,7 @@ impl Precedence {
     /// Get the precedence of the given token type in the context
     /// of the expression parser.
     fn of(token_ty: TokenType) -> Precedence {
-        use TokenType as T;
+        use crate::token::TokenType as T;
 
         match token_ty {
             T::Number => Precedence::None,
@@ -198,7 +199,7 @@ impl Parser {
     ///
     /// This function is analogous to a parselet.
     fn parse_prefix(&mut self, token: Token) -> Expr {
-        use TokenType as T;
+        use crate::token::TokenType as T;
         println!("parse_prefix {:?}", token);
 
         match token.ty {
@@ -227,7 +228,7 @@ impl Parser {
     }
 
     fn parse_infix(&mut self, left: Expr, token: Token) -> Expr {
-        use TokenType as T;
+        use crate::token::TokenType as T;
         println!("parse_infix {:?} ... {:?} ... {:?}", left, token, self.peek());
 
         let precedence = Precedence::of(token.ty);

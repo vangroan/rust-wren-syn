@@ -1,4 +1,4 @@
-use crate::lex::Token;
+use crate::token::Token;
 
 #[derive(Debug)]
 pub enum Syntax {
