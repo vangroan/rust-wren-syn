@@ -5,7 +5,7 @@ use rust_wren_syn::{Lexer, Parser, TokenType};
 /// Simple 1 + 2 * 3 test case.
 #[test]
 fn test_simple() {
-    let lexer = Lexer::from_str("1 + 2 * 3");
+    let lexer = Lexer::new("1 + 2 * 3");
     let tokens = lexer.into_tokens();
     println!("{:?}", tokens);
 
@@ -38,7 +38,7 @@ fn test_simple() {
 /// not working correctly.
 #[test]
 fn test_precedence() {
-    let lexer = Lexer::from_str("1 * 2 + 3");
+    let lexer = Lexer::new("1 * 2 + 3");
     let tokens = lexer.into_tokens();
     println!("{:?}", tokens);
 
@@ -75,7 +75,7 @@ fn test_precedence() {
 /// were incorrectly parsed with right-associativity.
 #[test]
 fn test_associativity() {
-    let lexer = Lexer::from_str("1 + 2 - 3");
+    let lexer = Lexer::new("1 + 2 - 3");
     let tokens = lexer.into_tokens();
     println!("{:?}", tokens);
 

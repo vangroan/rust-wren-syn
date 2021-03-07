@@ -1,7 +1,6 @@
 use itertools::{multipeek, MultiPeek};
 use smol_str::SmolStr;
-use std::convert::TryFrom;
-use std::str::CharIndices;
+use std::{convert::TryFrom, fmt, str::CharIndices};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
@@ -84,12 +83,12 @@ pub enum Lit {
     Comment(String),
 }
 
-impl Lit {
-    pub fn to_string(&self) -> String {
+impl fmt::Display for Lit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Lit::Number(s) => s.clone(),
-            Lit::String(s) => s.clone(),
-            Lit::Comment(s) => s.clone(),
+            Lit::Number(s) => fmt::Display::fmt(s.as_str(), f),
+            Lit::String(s) => fmt::Display::fmt(s.as_str(), f),
+            Lit::Comment(s) => fmt::Display::fmt(s.as_str(), f),
         }
     }
 }
@@ -159,7 +158,7 @@ impl<'a> Lexer<'a> {
     /// Creates a new `Lexer` for the given string.
     ///
     /// Returns `None` when the string is empty.
-    pub fn from_str(source: &'a str) -> Self {
+    pub fn new(source: &'a str) -> Self {
         Self {
             source: multipeek(source.char_indices()),
             source_size: source.len(),
@@ -236,7 +235,7 @@ impl<'a> Lexer<'a> {
                         self.consume_whitespace();
                     }
                     _ => {
-                        if Self::is_digit(c) {
+                        if c.is_ascii_digit() {
                             return Some(self.consume_number(TokenType::Number));
                         } else if Self::is_ident(c) {
                             return Some(self.consume_ident(TokenType::Ident));
@@ -336,19 +335,15 @@ impl<'a> Lexer<'a> {
     /// Checks whether the given character is considered valid for
     /// an identifier name.
     fn is_ident(c: char) -> bool {
-        (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
-    }
-
-    /// Checks whether the given character is valid for a number.
-    fn is_digit(c: char) -> bool {
-        c >= '0' && c <= '9'
+        // (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+        c.is_ascii_alphabetic() || c == '_'
     }
 
     fn consume_ident(&mut self, token_ty: TokenType) -> Token {
         self.start_buffer();
 
         while let Some((_, c)) = self.peek_char() {
-            if Self::is_ident(c) || Self::is_digit(c) {
+            if Self::is_ident(c) || c.is_ascii_digit() {
                 self.buf.push(c);
                 self.next_char();
             } else {
@@ -400,24 +395,17 @@ impl<'a> Lexer<'a> {
         // Consume tokens of the number literal until we
         // encounter a character that's invalid for any
         // of the supported numeral notations.
-        loop {
-            match self.peek_char() {
-                Some((_, c)) => {
-                    // TODO: Support numeral notations like binary '0b...', hex '0x..', etc.
-                    if Self::is_digit(c) {
-                        // Check is performed on peeked char
-                        // because we don't want to consume
-                        // something that terminates the numeral,
-                        // eg. whitespace.
-                        self.next_char();
-                    } else {
-                        break;
-                    }
-                }
-                None => {
-                    // Reached end of file.
-                    break;
-                }
+        while let Some((_, c)) = self.peek_char() {
+            // Support numeral notations decimal, hex `0x..` and scientific.
+            // TODO: Scientific notation
+            if c.is_ascii_digit() || c.is_ascii_hexdigit() || c == '.' {
+                // Check is performed on peeked char
+                // because we don't want to consume
+                // something that terminates the numeral,
+                // eg. whitespace.
+                self.next_char();
+            } else {
+                break;
             }
         }
 
@@ -444,28 +432,21 @@ impl<'a> Lexer<'a> {
         // Ensure clean peek state.
         self.reset_peek();
 
-        loop {
-            match self.peek_char() {
-                Some((_, c)) => {
-                    // Comment is anything until new line.
-                    if c == '\n' || c == '\0' {
-                        // But don't consume the next character,
-                        // we don't want the new line in the comment.
-                        //
-                        // It will be handled by the next iteration of
-                        // the lexer loop and go into the token stream
-                        // as a `Newline` token.
-                        break;
-                    }
-
-                    self.buf.push(c);
-                    self.next_char();
-                }
-                None => {
-                    // Reached end of file.
-                    break;
-                }
+        // Consume until EOF.
+        while let Some((_, c)) = self.peek_char() {
+            // Comment is anything until new line.
+            if c == '\n' || c == '\0' {
+                // But don't consume the next character,
+                // we don't want the new line in the comment.
+                //
+                // It will be handled by the next iteration of
+                // the lexer loop and go into the token stream
+                // as a `Newline` token.
+                break;
             }
+
+            self.buf.push(c);
+            self.next_char();
         }
 
         self.make_token(token_ty)
@@ -528,7 +509,7 @@ mod test {
 
     #[test]
     fn test_lexer_next_char() {
-        let mut lexer = Lexer::from_str("System.print(\"Hello, world!\")");
+        let mut lexer = Lexer::new("System.print(\"Hello, world!\")");
         let chars = [(0, 'S'), (1, 'y'), (2, 's'), (3, 't'), (4, 'e'), (5, 'm'), (6, '.')];
         for (index, c) in &chars {
             assert_eq!(lexer.next_char(), Some((*index, *c)));
@@ -537,7 +518,7 @@ mod test {
 
     #[test]
     fn test_lexer_next_token() {
-        let mut lexer = Lexer::from_str("System.print(\"Hello, world!\")");
+        let mut lexer = Lexer::new("System.print(\"Hello, world!\")");
 
         println!("{:#?}", lexer.next_token());
         println!("{:#?}", lexer.next_token());
@@ -559,13 +540,13 @@ mod test {
     #[test]
     fn test_lex_from_string() {
         let source = String::from("System.print(\"Hello, world!\")");
-        let lexer = Lexer::from_str(&source);
+        let lexer = Lexer::new(&source);
         assert_eq!(lexer.into_tokens().len(), 7);
     }
 
     #[test]
     fn test_lex_number_lit() {
-        let mut lexer = Lexer::from_str("1 + 2 * 3");
+        let mut lexer = Lexer::new("1 + 2 * 3");
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Add));
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
@@ -576,7 +557,7 @@ mod test {
     /// Div uses slash like line comment, so can be affect by comment lexing bugs.
     #[test]
     fn test_lex_div() {
-        let mut lexer = Lexer::from_str("1 / 2 / 3");
+        let mut lexer = Lexer::new("1 / 2 / 3");
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Div));
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Number));
@@ -586,7 +567,7 @@ mod test {
 
     #[test]
     fn test_comment_line() {
-        let mut lexer = Lexer::from_str(
+        let mut lexer = Lexer::new(
             r#"
         // a a a
         // b b b
@@ -610,7 +591,7 @@ mod test {
 
     #[test]
     fn test_keywords() {
-        let mut lexer = Lexer::from_str(
+        let mut lexer = Lexer::new(
             r#"class Foo {}
         var bar
         "#,

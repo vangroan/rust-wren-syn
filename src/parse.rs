@@ -36,6 +36,19 @@ impl Precedence {
     fn as_i32(&self) -> i32 {
         *self as i32
     }
+
+    /// Get the precedence of the given token type in the context
+    /// of the expression parser.
+    fn of(token_ty: TokenType) -> Precedence {
+        use TokenType as T;
+
+        match token_ty {
+            T::Number => Precedence::None,
+            T::Add | T::Sub => Precedence::Term,
+            T::Mul | T::Div => Precedence::Factor,
+            _ => Precedence::None,
+        }
+    }
 }
 
 impl TryFrom<i32> for Precedence {
@@ -200,7 +213,7 @@ impl Parser {
             T::Sub => {
                 // Negate
                 println!("parse_prefix() -> UnaryOp {{ operator: TokenType::Sub }}");
-                let precedence = Self::precedence(token.ty);
+                let precedence = Precedence::of(token.ty);
                 let right = self.parse_precedence(precedence + 1);
                 Expr::UnOp(UnaryOp {
                     operator: token,
@@ -217,7 +230,7 @@ impl Parser {
         use TokenType as T;
         println!("parse_infix {:?} ... {:?} ... {:?}", left, token, self.peek());
 
-        let precedence = Self::precedence(token.ty);
+        let precedence = Precedence::of(token.ty);
 
         // Associativity is handled by adjusting the precedence.
         // Left associativity is achieved by increasing the precedence
@@ -261,21 +274,21 @@ impl Parser {
 
     /// Get the precedence of the given token type in the context
     /// of the expression parser.
-    fn precedence(token_ty: TokenType) -> Precedence {
-        use TokenType as T;
+    // fn precedence(token_ty: TokenType) -> Precedence {
+    //     use TokenType as T;
 
-        match token_ty {
-            T::Number => Precedence::None,
-            T::Add | T::Sub => Precedence::Term,
-            T::Mul | T::Div => Precedence::Factor,
-            _ => Precedence::None,
-        }
-    }
+    //     match token_ty {
+    //         T::Number => Precedence::None,
+    //         T::Add | T::Sub => Precedence::Term,
+    //         T::Mul | T::Div => Precedence::Factor,
+    //         _ => Precedence::None,
+    //     }
+    // }
 
     /// Retrieve the precedence of the current token.
     fn peek_precedence(&self) -> Precedence {
         self.peek()
-            .map(|token| Self::precedence(token.ty))
+            .map(|token| Precedence::of(token.ty))
             .unwrap_or_else(|| Precedence::None)
     }
 
