@@ -17,6 +17,16 @@ pub struct Span {
     pub line: usize,
 }
 
+/// Buffered stream of tokens that allows arbitrary look ahead.
+/// 
+/// Tokens are lazily lexed. Peeking or consuming the next token
+/// triggers the internal lexer.
+/// 
+/// The peek semantics are determined by the internal `MultiPeek`.
+/// Calling `TokenStream::peek` is not idempotent, advancing a peek
+/// cursor forward by one token for each `peek()` call. The cursor
+/// can be reset explicitly using `TokenStream::reset_peek` or
+/// implicitly by calling on eof the consuming methods. 
 pub struct TokenStream<'a> {
     lexer: MultiPeek<Lexer<'a>>,
 }
@@ -229,6 +239,12 @@ impl<'a> Lexer<'a> {
                     }
                     _ => {
                         if c.is_ascii_digit() {
+                            if let Some((_, next_char)) = self.peek_char() {
+                                if next_char == 'x' {
+                                    return Some(self.consume_hex_number(TokenType::Number));
+                                }
+                            }
+                            // Decimal or scientific notation
                             return Some(self.consume_number(TokenType::Number));
                         } else if Self::is_ident(c) {
                             return Some(self.consume_ident(TokenType::Ident));
@@ -328,7 +344,6 @@ impl<'a> Lexer<'a> {
     /// Checks whether the given character is considered valid for
     /// an identifier name.
     fn is_ident(c: char) -> bool {
-        // (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
         c.is_ascii_alphabetic() || c == '_'
     }
 
@@ -391,20 +406,59 @@ impl<'a> Lexer<'a> {
         while let Some((_, c)) = self.peek_char() {
             // Support numeral notations decimal, hex `0x..` and scientific.
             // TODO: Hex notation
-            // TODO: Scientific notation
             // TODO: Lexer will have to record notation. Parser requires it to decide how to parse number.
-            if c.is_ascii_digit() /* || c.is_ascii_hexdigit() */ || c == '.' {
+            if c == 'e' || c == 'E' {
+                // Change number parse mode to scientific notation.
+                self.next_char();
+                self.buf.push(self.current.1);
+                return self.consume_scientific_number(token_ty);
+            } else if c.is_ascii_digit() /* || c.is_ascii_hexdigit() */ || c == '.' {
                 // Check is performed on peeked char
                 // because we don't want to consume
                 // something that terminates the numeral,
                 // eg. whitespace.
                 self.next_char();
+                self.buf.push(self.current.1);
             } else {
                 break;
             }
         }
 
         self.make_token(token_ty)
+    }
+
+    /// Continue lexing a number as scientific notation.
+    ///
+    /// Example `3e-7`
+    fn consume_scientific_number(&mut self, token_ty: TokenType) -> Token {
+        // Does not start the buffer because this should be called by `consume_number`.
+
+        // The sign must immediately follow the `e` character,
+        // but it's also optional.
+        if let Some((_, c)) = self.peek_char() {
+            if c.is_ascii_digit() || c == '-' || c == '+' {
+                self.next_char();
+                self.buf.push(self.current.1);
+            } else {
+                panic!("unexpected end of scientific number");
+            }
+        }
+
+        // Consume the rest of the number.
+        while let Some((_, c)) = self.peek_char() {
+            if c.is_ascii_digit() {
+                self.next_char();
+                self.buf.push(self.current.1);
+            } else {
+                break;
+            }
+        }
+
+        self.make_token(token_ty)
+    }
+
+    fn consume_hex_number(&mut self, _token_ty: TokenType) -> Token {
+        todo!("hex number not implemented yet");
     }
 
     /// Consumes whitespace, excluding new lines, until a non-whitespace
@@ -650,5 +704,14 @@ mod test {
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::RightBrace));
 
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::EOF));
+    }
+
+    #[test]
+    fn test_scientific_notation() {
+        let mut lexer = Lexer::new("3e-7");
+        let a = lexer.next_token().unwrap();
+        assert_eq!(a.ty, TokenType::Number);
+        assert_eq!(a.lit, Some(Lit::Number("3e-7".to_string())));
+        assert_eq!(lexer.next_token().unwrap().ty, TokenType::EOF);
     }
 }

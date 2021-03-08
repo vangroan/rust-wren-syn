@@ -216,7 +216,6 @@ impl Expr {
             T::Number => Ok(Expr::Num(Self::parse_number_literal(token)?)),
             T::Sub => {
                 // Negate
-                // let precedence = Precedence::of(token.ty);
                 let right = Self::parse_precedence(input, Precedence::Unary)?;
                 Ok(Expr::UnOp(UnaryOp {
                     operator: token,
@@ -276,6 +275,9 @@ impl Expr {
         }
     }
 
+    /// Parse a number literal token to a number syntax node.
+    ///
+    /// The value of the number is parsed and returned.
     fn parse_number_literal(token: Token) -> ParseResult<NumLit> {
         assert_eq!(token.ty, TokenType::Number);
 

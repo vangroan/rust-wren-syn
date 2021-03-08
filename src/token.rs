@@ -149,7 +149,7 @@ impl fmt::Display for KeywordType {
 }
 
 /// Literal value.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lit {
     Number(String),
     String(String),
