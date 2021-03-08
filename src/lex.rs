@@ -26,7 +26,7 @@ pub struct Span {
 /// Calling `TokenStream::peek` is not idempotent, advancing a peek
 /// cursor forward by one token for each `peek()` call. The cursor
 /// can be reset explicitly using `TokenStream::reset_peek` or
-/// implicitly by calling on eof the consuming methods. 
+/// implicitly by calling one of the consuming methods.
 pub struct TokenStream<'a> {
     lexer: MultiPeek<Lexer<'a>>,
 }
