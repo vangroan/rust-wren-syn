@@ -37,7 +37,17 @@ pub struct ClassDef {
     /// Base class that this class is inheriting from.
     pub parent: Option<Ident>,
     /// TODO: Member methods.
-    pub members: Vec<()>,
+    pub members: ClassMembers,
+}
+
+/// Class-level statements.
+#[derive(Debug, Default)]
+pub struct ClassMembers {
+    pub construct: Option<()>,
+    pub fields: Vec<()>,
+    pub props: Vec<()>,
+    pub methods: Vec<()>,
+    pub ops: Vec<()>,
 }
 
 #[derive(Debug)]

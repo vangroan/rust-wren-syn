@@ -162,32 +162,71 @@ impl Parser {
     fn class_definition(&mut self) -> Result<ast::ClassDef, ParseError> {
         println!("class_definition");
 
-        // Consume keyword
+        // Consume class keyword
         self.next_token();
 
-        if let Some(token) = self.consume(TokenType::Ident) {
-            if token.ty != TokenType::Ident {
-                return Err(ParseError {
-                    msg: "class name expected".to_string(),
-                });
-            }
-
-            if let Some(ident) = token.ident {
-                // TODO: Check if next is keyword `is`.
-                Ok(ast::ClassDef {
-                    ident,
-                    // TODO: Parent class
-                    parent: None,
-                    members: vec![],
-                })
+        if let Some(cls_ident) = self.consume(TokenType::Ident).and_then(|t| t.ident) {
+            // TODO: Check if next is keyword `is`.
+            if self.match_token(TokenType::Keyword(KeywordType::Is)) {
+                // Class derives another.
+                if let Some(base_ident) = self.consume(TokenType::Ident).and_then(|t| t.ident) {
+                    Ok(ast::ClassDef {
+                        ident: cls_ident,
+                        parent: Some(base_ident),
+                        // TODO: Class members
+                        members: self.class_definition_body()?,
+                    })
+                } else {
+                    Err(ParseError {
+                        msg: "base class name expected".to_string(),
+                    })
+                }
             } else {
-                Err(ParseError {
-                    msg: "class name expected".to_string(),
+                // Simple class definition with no inheritance.
+                Ok(ast::ClassDef {
+                    ident: cls_ident,
+                    parent: None,
+                    // TODO: Class members
+                    members: self.class_definition_body()?,
                 })
             }
         } else {
             Err(ParseError {
-                msg: "expected end of file".to_string(),
+                msg: "class name expected".to_string(),
+            })
+        }
+    }
+
+    fn class_definition_body(&mut self) -> Result<ast::ClassMembers, ParseError>  {
+        println!("class_definition_body");
+        use TokenType as T;
+        use KeywordType as K;
+
+        let mut members = ast::ClassMembers::default();
+
+        if self.match_token(TokenType::LeftBrace) {
+            // Class members
+            loop {
+                match self.peek().map(|t| t.ty) {
+                    Some(T::RightBrace) => {
+                        self.next_token();
+                        return Ok(members);
+                    },
+                    Some(T::Keyword(K::Construct)) => {
+                        self.next_token();
+                        members.construct = Some(());
+                    },
+                    None => return Err(ParseError {
+                        msg: "unexpected end-of-file".to_string(),
+                    }),
+                    _ => return Err(ParseError {
+                        msg: "unexpected token".to_string(),
+                    }),
+                }
+            }
+        } else {
+            Err(ParseError {
+                msg: "opening brace '{' expected".to_string(),
             })
         }
     }

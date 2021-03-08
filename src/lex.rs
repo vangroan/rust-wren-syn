@@ -519,4 +519,30 @@ mod test {
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::Newline));
         assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::EOF));
     }
+
+    #[test]
+    fn test_class_def() {
+        let mut lexer = Lexer::new(r#"class Foo is Bar {}"#);
+
+        let keyword_class = lexer.next_token().unwrap();
+        assert_eq!(keyword_class.ty, TokenType::Keyword(KeywordType::Class));
+        assert_eq!(keyword_class.ident.unwrap().name.as_str(), "class");
+
+        let ident_foo = lexer.next_token().unwrap();
+        assert_eq!(ident_foo.ty, TokenType::Ident);
+        assert_eq!(ident_foo.ident.unwrap().name.as_str(), "Foo");
+
+        let keyword_is = lexer.next_token().unwrap();
+        assert_eq!(keyword_is.ty, TokenType::Keyword(KeywordType::Is));
+        assert_eq!(keyword_is.ident.unwrap().name.as_str(), "is");
+
+        let base_cls_foo = lexer.next_token().unwrap();
+        assert_eq!(base_cls_foo.ty, TokenType::Ident);
+        assert_eq!(base_cls_foo.ident.unwrap().name.as_str(), "Bar");
+
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::LeftBrace));
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::RightBrace));
+
+        assert_eq!(lexer.next_token().map(|t| t.ty), Some(TokenType::EOF));
+    }
 }
