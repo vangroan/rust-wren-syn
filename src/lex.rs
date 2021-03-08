@@ -17,6 +17,10 @@ pub struct Span {
     pub line: usize,
 }
 
+pub struct TokenStream {
+    // lexer: MultiPeek<Vec<Token>>,
+}
+
 pub struct Lexer<'a> {
     /// Iterator over UTF-8 encoded source code.
     ///

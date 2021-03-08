@@ -11,10 +11,7 @@ fn test_empty_class() {
     let parser = Parser::new(tokens);
     let ast = parser.parse_script();
     println!("{:#?}", ast);
-
-
 }
-
 
 #[test]
 fn test_derived_empty_class() {
