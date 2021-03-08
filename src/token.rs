@@ -1,11 +1,8 @@
 //! Token types outputted by lexing.
 
-use std::convert::TryFrom;
-use std::fmt;
-
-use smol_str::SmolStr;
-
 use crate::Span;
+use smol_str::SmolStr;
+use std::{convert::TryFrom, fmt};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
@@ -42,6 +39,38 @@ pub enum TokenType {
     EOF,
 }
 
+impl fmt::Display for TokenType {
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use TokenType as T;
+
+        match self {
+            T::LeftParen        => write!(f, "("),
+            T::RightParen       => write!(f, ")"),
+            T::LeftBracket      => write!(f, "["),
+            T::RightBracket     => write!(f, "]"),
+            T::LeftBrace        => write!(f, "{{"),
+            T::RightBrace       => write!(f, "}}"),
+            T::Dot              => write!(f, "."),
+            T::Add              => write!(f, "+"),
+            T::Sub              => write!(f, "-"),
+            T::Mul              => write!(f, "*"),
+            T::Div              => write!(f, "/"),
+            T::Ident            => write!(f, "identifier"),
+            T::Keyword(keyword) => fmt::Display::fmt(keyword, f),
+            T::Number           => write!(f, "number"),
+            T::String           => write!(f, "string"),
+            T::Interpolated     => write!(f, "interpolated"),
+            T::CommentLine      => write!(f, "//"),
+            T::CommentLeft      => write!(f, "/*"),
+            T::CommentRight     => write!(f, "*/"),
+            T::Comment          => write!(f, "comment"),
+            T::Newline          => write!(f, "//n"),
+            T::EOF              => write!(f, "end-of-file"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum KeywordType {
     Break,
@@ -67,26 +96,54 @@ pub enum KeywordType {
 impl<'a> TryFrom<&'a str> for KeywordType {
     type Error = ();
 
+    #[rustfmt::skip]
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        use KeywordType as K;
         match value {
-            "break" => Ok(KeywordType::Break),
-            "class" => Ok(KeywordType::Class),
-            "construct" => Ok(KeywordType::Construct),
-            "continue" => Ok(KeywordType::Continue),
-            "false" => Ok(KeywordType::False),
-            "for" => Ok(KeywordType::For),
-            "foreign" => Ok(KeywordType::Foreign),
-            "if" => Ok(KeywordType::If),
-            "import" => Ok(KeywordType::Import),
-            "is" => Ok(KeywordType::Is),
-            "return" => Ok(KeywordType::Return),
-            "static" => Ok(KeywordType::Static),
-            "super" => Ok(KeywordType::Super),
-            "this" => Ok(KeywordType::This),
-            "true" => Ok(KeywordType::True),
-            "var" => Ok(KeywordType::Var),
-            "while" => Ok(KeywordType::While),
+            "break"      => Ok(K::Break),
+            "class"      => Ok(K::Class),
+            "construct"  => Ok(K::Construct),
+            "continue"   => Ok(K::Continue),
+            "false"      => Ok(K::False),
+            "for"        => Ok(K::For),
+            "foreign"    => Ok(K::Foreign),
+            "if"         => Ok(K::If),
+            "import"     => Ok(K::Import),
+            "is"         => Ok(K::Is),
+            "return"     => Ok(K::Return),
+            "static"     => Ok(K::Static),
+            "super"      => Ok(K::Super),
+            "this"       => Ok(K::This),
+            "true"       => Ok(K::True),
+            "var"        => Ok(K::Var),
+            "while"      => Ok(K::While),
             _ => Err(()),
+        }
+    }
+}
+
+impl fmt::Display for KeywordType {
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use KeywordType as K;
+        match self {
+            K::Break        => write!(f, "break"),
+            K::Class        => write!(f, "class"),
+            K::Construct    => write!(f, "construct"),
+            K::Continue     => write!(f, "continue"),
+            K::False        => write!(f, "false"),
+            K::For          => write!(f, "for"),
+            K::Foreign      => write!(f, "foreign"),
+            K::If           => write!(f, "if"),
+            K::Import       => write!(f, "import"),
+            K::Is           => write!(f, "is"),
+            K::Return       => write!(f, "return"),
+            K::Static       => write!(f, "static"),
+            K::Super        => write!(f, "super"),
+            K::This         => write!(f, "this"),
+            K::True         => write!(f, "true"),
+            K::Var          => write!(f, "var"),
+            K::While        => write!(f, "while"),
         }
     }
 }

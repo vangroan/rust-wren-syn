@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, str::CharIndices};
+use std::{convert::TryFrom, error::Error, fmt, str::CharIndices};
 
 use itertools::{multipeek, MultiPeek};
 use smol_str::SmolStr;
@@ -17,8 +17,98 @@ pub struct Span {
     pub line: usize,
 }
 
-pub struct TokenStream {
-    // lexer: MultiPeek<Vec<Token>>,
+pub struct TokenStream<'a> {
+    lexer: MultiPeek<Lexer<'a>>,
+}
+
+impl<'a> TokenStream<'a> {
+    pub fn new(lexer: Lexer<'a>) -> Self {
+        Self {
+            lexer: multipeek(lexer),
+        }
+    }
+
+    /// Consumes the current token regardless of type.
+    ///
+    /// Returns `None` when the cursor is at the end of the token stream.
+    pub fn next_token(&mut self) -> Option<Token> {
+        self.lexer.next()
+    }
+
+    /// Consumes the current token if it matches the given token type.
+    ///
+    /// Returns true when matched. Returns false when token types
+    /// do not match, or the token stream is at the end.
+    ///
+    /// Does not consume the token if the types do not match.
+    pub fn match_token(&mut self, token_ty: TokenType) -> bool {
+        // Ensure clean peek state.
+        self.lexer.reset_peek();
+
+        match self.lexer.peek() {
+            Some(token) => {
+                let is_match = token.ty == token_ty;
+                if is_match {
+                    self.lexer.next();
+                }
+                is_match
+            }
+            None => false,
+        }
+    }
+
+    /// Return the current token with advancing the cursor.
+    ///
+    /// The consumed token must match the given token type, otherwise
+    /// a parsing error is returned.
+    pub fn consume(&mut self, token_ty: TokenType) -> Option<Result<Token, TokenError>> {
+        // Ensure clean peek state.
+        self.lexer.reset_peek();
+
+        // We should not consume the token if the types don't match.
+        let t = self.lexer.peek();
+        if let Some(token) = &t {
+            if token.ty != token_ty {
+                // TODO: Return parsing error.
+                panic!(
+                    "Parsing error: expected token '{:?}' but encountered '{:?}'",
+                    token_ty, token.ty
+                );
+            }
+        }
+
+        self.lexer.next().map(Ok)
+    }
+
+    /// Return the current token without advancing the cursor.
+    ///
+    /// Returns `None` when lexing is done.
+    pub fn peek(&mut self) -> Option<&Token> {
+        self.lexer.peek()
+    }
+
+    pub fn reset_peek(&mut self) {
+        self.lexer.reset_peek()
+    }
+}
+
+/// Error returned when an unexpected token type is encountered.
+#[derive(Debug)]
+pub struct TokenError {
+    expected: TokenType,
+    encountered: TokenType,
+}
+
+impl Error for TokenError {}
+
+impl fmt::Display for TokenError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "encountered unexpected token '{}', expected '{}'",
+            self.encountered, self.expected
+        )
+    }
 }
 
 pub struct Lexer<'a> {
@@ -381,6 +471,16 @@ impl<'a> Lexer<'a> {
         // Exclusive because source size is used a marker to
         // return an End-of-File token.
         self.current.0 > self.source_size
+    }
+}
+
+/// Implement `Lexer` as an interator for consuming
+/// tokens lazily.
+impl<'a> Iterator for Lexer<'a> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_token()
     }
 }
 

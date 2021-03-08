@@ -1,7 +1,23 @@
-use std::convert::{Infallible, TryFrom};
-use std::{fmt, ops};
+use crate::{
+    ast,
+    lex::TokenStream,
+    token::{KeywordType, Token, TokenType},
+};
+use std::{
+    convert::{Infallible, TryFrom},
+    fmt, ops,
+};
 
-use crate::{Expr, KeywordType, ParseError, Syntax, Token, TokenType};
+mod errors;
+mod stmt;
+
+pub use errors::{ParseError, ParseResult, SyntaxError};
+pub use stmt::*;
+
+/// Parsing interface for any syntax tree node.
+pub trait Parse: Sized {
+    fn parse(input: &mut TokenStream) -> ParseResult<Self>;
+}
 
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 enum Precedence {
@@ -99,7 +115,7 @@ enum Associativity {
 pub struct Parser {
     tokens: Vec<Token>,
     cursor: usize,
-    statements: Vec<Syntax>,
+    statements: Vec<ast::Syntax>,
 }
 
 impl Parser {
@@ -114,7 +130,7 @@ impl Parser {
     /// Parse the given token buffer as top-level Wren script file.
     ///
     /// TODO: Confusing name. Sounds like it should be accepting script as argument.
-    pub fn parse_script(mut self) -> Vec<Syntax> {
+    pub fn parse_script(mut self) -> Vec<ast::Syntax> {
         while !self.at_end() && self.peek().map(|t| t.ty != TokenType::EOF).unwrap_or_default() {
             self.definition();
         }
@@ -138,12 +154,11 @@ impl Parser {
                     KeywordType::Class => {
                         let class_def = self.class_definition().expect("parse definition failed");
                         self.statements
-                            .push(crate::Syntax::Stmt(crate::Stmt::Def(crate::Def::Class(class_def))));
+                            .push(ast::Syntax::Stmt(ast::Stmt::Def(crate::Def::Class(class_def))));
                     }
                     // TODO: Foreign
                     // TODO: Import
                     // TODO: Var
-                    // Else: Simple Statement
                     _ => todo!("{:?} definition statement not implemented yet", keyword),
                 }
             } else {
@@ -152,7 +167,7 @@ impl Parser {
         }
     }
 
-    fn class_definition(&mut self) -> Result<crate::ClassDef, ParseError> {
+    fn class_definition(&mut self) -> Result<ast::ClassDef, SyntaxError> {
         println!("class_definition");
 
         // Consume class keyword
@@ -163,20 +178,20 @@ impl Parser {
             if self.match_token(TokenType::Keyword(KeywordType::Is)) {
                 // Class derives another.
                 if let Some(base_ident) = self.consume(TokenType::Ident).and_then(|t| t.ident) {
-                    Ok(crate::ClassDef {
+                    Ok(ast::ClassDef {
                         ident: cls_ident,
                         parent: Some(base_ident),
                         // TODO: Class members
                         members: self.class_definition_body()?,
                     })
                 } else {
-                    Err(ParseError {
+                    Err(SyntaxError {
                         msg: "base class name expected".to_string(),
                     })
                 }
             } else {
                 // Simple class definition with no inheritance.
-                Ok(crate::ClassDef {
+                Ok(ast::ClassDef {
                     ident: cls_ident,
                     parent: None,
                     // TODO: Class members
@@ -184,18 +199,18 @@ impl Parser {
                 })
             }
         } else {
-            Err(ParseError {
+            Err(SyntaxError {
                 msg: "class name expected".to_string(),
             })
         }
     }
 
-    fn class_definition_body(&mut self) -> Result<crate::ClassMembers, ParseError> {
+    fn class_definition_body(&mut self) -> Result<ast::ClassMembers, SyntaxError> {
         println!("class_definition_body");
         use crate::KeywordType as K;
         use crate::TokenType as T;
 
-        let mut members = crate::ClassMembers::default();
+        let mut members = ast::ClassMembers::default();
 
         if self.match_token(TokenType::LeftBrace) {
             // Class members
@@ -210,19 +225,19 @@ impl Parser {
                         members.construct = Some(());
                     }
                     None => {
-                        return Err(ParseError {
+                        return Err(SyntaxError {
                             msg: "unexpected end-of-file".to_string(),
                         })
                     }
                     _ => {
-                        return Err(ParseError {
+                        return Err(SyntaxError {
                             msg: "unexpected token".to_string(),
                         })
                     }
                 }
             }
         } else {
-            Err(ParseError {
+            Err(SyntaxError {
                 msg: "opening brace '{' expected".to_string(),
             })
         }
@@ -243,11 +258,11 @@ impl Parser {
         // TODO: If
         // TODO: Return
         // Else: Expression statement
-        let expr = Syntax::Expr(self.expression());
+        let expr = ast::Syntax::Expr(self.expression());
         self.statements.push(expr);
     }
 
-    fn expression(&mut self) -> Expr {
+    fn expression(&mut self) -> ast::Expr {
         println!("expression");
 
         // Pratt parser is initialised with lowest possible precedence.
@@ -257,7 +272,7 @@ impl Parser {
     /// Entrypoint for the top-down precedence parser.
     ///
     /// The implementation is a straight forward Pratt parser.
-    fn parse_precedence(&mut self, precedence: Precedence) -> Expr {
+    fn parse_precedence(&mut self, precedence: Precedence) -> ast::Expr {
         println!("parse_precedence({}) {:?}", precedence, self.peek());
 
         let token = self.next_token().expect("Expression expected");
@@ -280,7 +295,7 @@ impl Parser {
     /// Parse a prefix token in an expression.
     ///
     /// This function is analogous to a parselet.
-    fn parse_prefix(&mut self, token: Token) -> Expr {
+    fn parse_prefix(&mut self, token: Token) -> ast::Expr {
         use crate::token::TokenType as T;
         use crate::{Notation, NumLit, UnaryOp};
         println!("parse_prefix {:?}", token);
@@ -289,7 +304,7 @@ impl Parser {
             T::Number => {
                 println!("parse_prefix() -> NumLit");
 
-                Expr::Num(NumLit {
+                ast::Expr::Num(NumLit {
                     token,
                     notation: Notation::Decimal,
                 })
@@ -299,7 +314,7 @@ impl Parser {
                 println!("parse_prefix() -> UnaryOp {{ operator: TokenType::Sub }}");
                 let precedence = Precedence::of(token.ty);
                 let right = self.parse_precedence(precedence + 1);
-                Expr::UnOp(UnaryOp {
+                ast::Expr::UnOp(UnaryOp {
                     operator: token,
                     rhs: Box::new(right),
                 })
@@ -310,7 +325,7 @@ impl Parser {
         }
     }
 
-    fn parse_infix(&mut self, left: Expr, token: Token) -> Expr {
+    fn parse_infix(&mut self, left: ast::Expr, token: Token) -> ast::Expr {
         use crate::token::TokenType as T;
         use crate::BinaryOp;
         println!("parse_infix {:?} ... {:?} ... {:?}", left, token, self.peek());
@@ -341,7 +356,7 @@ impl Parser {
         let right = self.parse_precedence(precedence + associativity);
 
         match token.ty {
-            T::Add | T::Sub | T::Mul | T::Div => Expr::BinOp(BinaryOp {
+            T::Add | T::Sub | T::Mul | T::Div => ast::Expr::BinOp(BinaryOp {
                 operator: token,
                 lhs: Box::new(left),
                 rhs: Box::new(right),
@@ -429,7 +444,7 @@ impl Parser {
     }
 
     /// Return the token offset from the current cursor without advancing the cursor.
-    fn look_ahead(&mut self, offset: i32) -> Option<Token> {
+    fn _look_ahead(&mut self, offset: i32) -> Option<Token> {
         self.tokens.get((self.cursor as i32 + offset) as usize).cloned()
     }
 
