@@ -390,8 +390,10 @@ impl<'a> Lexer<'a> {
         // of the supported numeral notations.
         while let Some((_, c)) = self.peek_char() {
             // Support numeral notations decimal, hex `0x..` and scientific.
+            // TODO: Hex notation
             // TODO: Scientific notation
-            if c.is_ascii_digit() || c.is_ascii_hexdigit() || c == '.' {
+            // TODO: Lexer will have to record notation. Parser requires it to decide how to parse number.
+            if c.is_ascii_digit() /* || c.is_ascii_hexdigit() */ || c == '.' {
                 // Check is performed on peeked char
                 // because we don't want to consume
                 // something that terminates the numeral,

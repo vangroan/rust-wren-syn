@@ -1,6 +1,6 @@
 //! Test class definition parsing.
 
-use rust_wren_syn::{Lexer, Parser, TokenStream, DefStmt, Parse};
+use rust_wren_syn::{DefStmt, Lexer, Parse, Parser, TokenStream};
 
 #[test]
 fn test_empty_class() {

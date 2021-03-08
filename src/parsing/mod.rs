@@ -9,9 +9,11 @@ use std::{
 };
 
 mod errors;
+mod expr;
 mod stmt;
 
 pub use errors::{ParseError, ParseResult, SyntaxError};
+pub use expr::*;
 pub use stmt::*;
 
 /// Parsing interface for any syntax tree node.
@@ -154,7 +156,7 @@ impl Parser {
                     KeywordType::Class => {
                         let class_def = self.class_definition().expect("parse definition failed");
                         self.statements
-                            .push(ast::Syntax::Stmt(ast::Stmt::Def(crate::Def::Class(class_def))));
+                            .push(ast::Syntax::Stmt(ast::Stmt::Def(crate::ast::Def::Class(class_def))));
                     }
                     // TODO: Foreign
                     // TODO: Import
@@ -296,8 +298,8 @@ impl Parser {
     ///
     /// This function is analogous to a parselet.
     fn parse_prefix(&mut self, token: Token) -> ast::Expr {
+        use crate::ast::{Notation, NumLit, UnaryOp};
         use crate::token::TokenType as T;
-        use crate::{Notation, NumLit, UnaryOp};
         println!("parse_prefix {:?}", token);
 
         match token.ty {
@@ -326,8 +328,8 @@ impl Parser {
     }
 
     fn parse_infix(&mut self, left: ast::Expr, token: Token) -> ast::Expr {
+        use crate::ast::BinaryOp;
         use crate::token::TokenType as T;
-        use crate::BinaryOp;
         println!("parse_infix {:?} ... {:?} ... {:?}", left, token, self.peek());
 
         let precedence = Precedence::of(token.ty);

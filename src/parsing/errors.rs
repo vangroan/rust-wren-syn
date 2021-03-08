@@ -20,8 +20,11 @@ impl Error for ParseError {
 }
 
 impl fmt::Display for ParseError {
-    fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ParseError::Token(err) => write!(f, "token error: {}", err),
+            ParseError::Syntax(err) => write!(f, "syntax error: {}", err),
+        }
     }
 }
 
@@ -48,6 +51,6 @@ impl Error for SyntaxError {}
 
 impl fmt::Display for SyntaxError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "error: {}", self.msg)
+        write!(f, "{}", self.msg)
     }
 }

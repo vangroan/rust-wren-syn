@@ -1,6 +1,6 @@
 //! Test expression parsing.
 
-use rust_wren_syn::{Lexer, Parser, TokenType};
+use rust_wren_syn::{Expr, Lexer, Parse, Parser, TokenStream, TokenType};
 
 /// Simple 1 + 2 * 3 test case.
 #[test]
@@ -27,6 +27,33 @@ fn test_simple() {
 
     let three = mul.rhs.number().unwrap();
     assert_eq!(three.token.ty, TokenType::Number);
+}
+
+/// Simple 1 + -2 * 3 test case.
+#[test]
+fn test_simple_expr() {
+    let lexer = Lexer::new("1 + -2 * 3");
+    let mut tokens = TokenStream::new(lexer);
+
+    let expr = Expr::parse(&mut tokens).unwrap();
+    println!("{:#?}", expr);
+    // let err = Expr::parse(&mut tokens).unwrap_err();
+    // println!("{}", err);
+
+    // let add = ast.first().unwrap().expr().unwrap().binary().unwrap();
+    // assert_eq!(add.operator.ty, TokenType::Add);
+
+    // let one = add.lhs.number().unwrap();
+    // assert_eq!(one.token.ty, TokenType::Number);
+
+    // let mul = add.rhs.binary().unwrap();
+    // assert_eq!(mul.operator.ty, TokenType::Mul);
+
+    // let two = mul.lhs.number().unwrap();
+    // assert_eq!(two.token.ty, TokenType::Number);
+
+    // let three = mul.rhs.number().unwrap();
+    // assert_eq!(three.token.ty, TokenType::Number);
 }
 
 /// Simple 1 * 2 + 3 test case.

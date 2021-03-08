@@ -156,6 +156,16 @@ pub enum Lit {
     Comment(String),
 }
 
+impl Lit {
+    #[inline]
+    pub fn number(&self) -> Option<&str> {
+        match self {
+            Lit::Number(s) => Some(s),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Display for Lit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

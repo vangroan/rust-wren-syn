@@ -63,6 +63,13 @@ pub struct ClassMembers {
     pub ops: Vec<()>,
 }
 
+/// Simple statement.
+///
+/// Definition statements can only appear at the top level of the curly braces.
+/// Simple statements exclude variable binding statements like
+/// `var` and `class`, because these are not allowed in places
+/// like the branches of `if` conditional statement that don't
+/// have curly braces.
 #[derive(Debug)]
 pub enum SimpleStmt {
     Break,
