@@ -10,10 +10,12 @@ use std::{
 
 mod errors;
 mod expr;
+mod module;
 mod stmt;
 
 pub use errors::{ParseError, ParseResult, SyntaxError};
 pub use expr::*;
+pub use module::*;
 pub use stmt::*;
 
 /// Parsing interface for any syntax tree node.

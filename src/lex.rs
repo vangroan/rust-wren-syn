@@ -18,10 +18,10 @@ pub struct Span {
 }
 
 /// Buffered stream of tokens that allows arbitrary look ahead.
-/// 
+///
 /// Tokens are lazily lexed. Peeking or consuming the next token
 /// triggers the internal lexer.
-/// 
+///
 /// The peek semantics are determined by the internal `MultiPeek`.
 /// Calling `TokenStream::peek` is not idempotent, advancing a peek
 /// cursor forward by one token for each `peek()` call. The cursor
@@ -63,7 +63,10 @@ impl<'a> TokenStream<'a> {
                 }
                 is_match
             }
-            None => false,
+            None => {
+                self.lexer.reset_peek();
+                false
+            }
         }
     }
 
@@ -71,7 +74,7 @@ impl<'a> TokenStream<'a> {
     ///
     /// The consumed token must match the given token type, otherwise
     /// a parsing error is returned.
-    pub fn consume(&mut self, token_ty: TokenType) -> Option<Result<Token, TokenError>> {
+    pub fn consume(&mut self, token_ty: TokenType) -> Result<Token, TokenError> {
         // Ensure clean peek state.
         self.lexer.reset_peek();
 
@@ -80,14 +83,28 @@ impl<'a> TokenStream<'a> {
         if let Some(token) = &t {
             if token.ty != token_ty {
                 // TODO: Return parsing error.
-                panic!(
-                    "Parsing error: expected token '{:?}' but encountered '{:?}'",
-                    token_ty, token.ty
-                );
+                Err(TokenError {
+                    expected: token_ty,
+                    encountered: token.ty,
+                })
+            } else {
+                Ok(self.lexer.next().unwrap())
+            }
+        } else {
+            panic!("unexpected end-of-file");
+        }
+    }
+
+    /// Consumes one or more new lines until something else is reached.
+    pub fn match_lines(&mut self) {
+        self.lexer.reset_peek();
+        if let Some(token) = self.lexer.peek() {
+            if token.ty == TokenType::Newline {
+                self.lexer.next();
+            } else {
+                return;
             }
         }
-
-        self.lexer.next().map(Ok)
     }
 
     /// Return the current token without advancing the cursor.
@@ -105,8 +122,8 @@ impl<'a> TokenStream<'a> {
 /// Error returned when an unexpected token type is encountered.
 #[derive(Debug)]
 pub struct TokenError {
-    expected: TokenType,
-    encountered: TokenType,
+    pub expected: TokenType,
+    pub encountered: TokenType,
 }
 
 impl Error for TokenError {}
@@ -115,7 +132,7 @@ impl fmt::Display for TokenError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "encountered unexpected token '{}', expected '{}'",
+            "encountered token '{}', expected '{}'",
             self.encountered, self.expected
         )
     }
@@ -231,6 +248,16 @@ impl<'a> Lexer<'a> {
                         }
                         return Some(self.make_token(TokenType::Div));
                     }
+                    '=' => {
+                        if let Some((_, next_char)) = self.peek_char() {
+                            if next_char == '=' {
+                                self.next_char();
+                                return Some(self.make_token(TokenType::EqEq));
+                            }
+                        }
+                        return Some(self.make_token(TokenType::Eq));
+                    }
+                    ',' => return Some(self.make_token(TokenType::Comma)),
                     '\n' => {
                         return Some(self.make_token(TokenType::Newline));
                     }

@@ -12,11 +12,15 @@ pub enum TokenType {
     RightBracket, // ]
     LeftBrace,    // {
     RightBrace,   // }
-    Dot,
-    Add,
-    Sub,
-    Mul,
-    Div,
+    Dot,          // .
+    Add,          // +
+    Sub,          // -
+    Mul,          // *
+    Div,          // /
+    Eq,           // =
+    EqEq,         // ==
+    NotEq,        // !=
+    Comma,        // ,
 
     Ident,
     Keyword(KeywordType),
@@ -56,6 +60,10 @@ impl fmt::Display for TokenType {
             T::Sub              => write!(f, "-"),
             T::Mul              => write!(f, "*"),
             T::Div              => write!(f, "/"),
+            T::Eq               => write!(f, "="),
+            T::EqEq             => write!(f, "=="),
+            T::NotEq            => write!(f, "!="),
+            T::Comma            => write!(f, ","),
             T::Ident            => write!(f, "identifier"),
             T::Keyword(keyword) => fmt::Display::fmt(keyword, f),
             T::Number           => write!(f, "number"),

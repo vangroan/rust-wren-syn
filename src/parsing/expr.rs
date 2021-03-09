@@ -174,6 +174,7 @@ impl Expr {
     ///
     /// The implementation is a straight forward Pratt parser.
     fn parse_precedence(input: &mut TokenStream, precedence: Precedence) -> ParseResult<Expr> {
+        println!("Expr::parse_precedence");
         let token = input.next_token().ok_or_else(|| SyntaxError {
             msg: "expression expected".to_string(),
         })?;
