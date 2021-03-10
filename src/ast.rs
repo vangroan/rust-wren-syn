@@ -1,3 +1,4 @@
+#![deprecated]
 use crate::token::{Ident, Token};
 
 #[derive(Debug)]

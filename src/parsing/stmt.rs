@@ -68,6 +68,9 @@ pub struct ClassMembers {
 /// Method declaration, inside a class body.
 #[derive(Debug)]
 pub struct Method {
+    /// Comments that immediately preceded the
+    /// method definition.
+    pub comments: Vec<Comment>,
     pub modifiers: Modifiers,
     pub sig: Signature,
     /// Class fields are declared in methods.
@@ -135,7 +138,7 @@ impl Parse for DefStmt {
         use KeywordType as K;
         use TokenType as T;
 
-        input.reset_peek();
+        input.match_lines();
 
         if let Some(token) = input.peek() {
             if let T::Keyword(keyword) = token.ty {
@@ -213,7 +216,6 @@ impl Parse for ClassDef {
 impl Parse for ClassMembers {
     fn parse(input: &mut TokenStream) -> ParseResult<Self> {
         println!("ClassMembers::parse");
-        use KeywordType as K;
         use TokenType as T;
 
         // Class body is always opened by a brace.
@@ -224,6 +226,11 @@ impl Parse for ClassMembers {
         let mut methods = vec![];
 
         while !input.match_token(T::RightBrace) {
+            input.match_lines();
+
+            Comment::ignore(input);
+            input.match_lines();
+
             let method = Method::parse(input)?;
 
             // TODO: Extract fields from method.
@@ -234,15 +241,21 @@ impl Parse for ClassMembers {
                 methods.push(method);
             }
 
-            // Don't require a newline after the last definition.
+            // Don't require a newline after the last member definition.
             if input.match_token(T::RightBrace) {
                 break;
             }
 
+            // Members must be separated with new lines.
             input.match_token(T::Newline);
         }
 
-        if !input.match_token(T::Newline) {
+        // Comments are allowed immediately after class definition.
+        // Comment::ignore(input);
+
+        // Don't allow any other statements or expressions after
+        // class definition.
+        if !input.match_token(T::Newline) && !input.match_token(TokenType::EOF) {
             return Err(SyntaxError {
                 msg: "expected new line after class definition".to_string(),
             }
@@ -332,6 +345,7 @@ impl Method {
 
             // Foreign methods don't have bodies.
             if modifiers.is_foreign {
+                // Foreign method has no body.
                 // return Ok(Method {
                 //     modifiers,
                 //     params,
@@ -340,10 +354,11 @@ impl Method {
                 todo!()
             } else {
                 // TODO: Parse body
-                input.match_token(T::LeftBrace);
-                input.match_token(T::RightBrace);
+                // input.match_token(T::LeftBrace);
+                // input.match_token(T::RightBrace);
 
                 Ok(Method {
+                    comments: Default::default(),
                     modifiers,
                     sig: Signature {
                         ident: maybe_ident,
@@ -351,13 +366,13 @@ impl Method {
                         params,
                     },
                     fields: Default::default(),
-                    body: (),
+                    body: Self::parse_body(input)?,
                 })
             }
         }
     }
 
-    fn parse_operator(input: &mut TokenStream) -> ParseResult<Self> {
+    fn parse_operator(_input: &mut TokenStream) -> ParseResult<Self> {
         todo!("parse operator methods")
     }
 
@@ -403,8 +418,54 @@ impl Method {
         Ok(params)
     }
 
-    fn parse_body(input: &mut TokenStream) -> ParseResult<Self> {
-        todo!()
+    /// TODO: Parse method body
+    fn parse_body(input: &mut TokenStream) -> ParseResult<()> {
+        println!("Method::parse_body");
+        use TokenType as T;
+
+        input.consume(T::LeftBrace)?;
+
+        while !input.match_token(T::RightBrace) {
+            if let Some(token) = input.peek() {
+                match token.ty {
+                    T::EOF => return Err(SyntaxError { msg: "unexpected end-of-file".to_string() }.into()),
+                    T::RightBrace => {
+                        // Prevent terminal token from being consumed.
+                        input.match_token(T::RightBrace);
+                        break;
+                    }
+                    _ => {
+                        // TODO: Parse statements in method body
+                        println!("########### IGNORE");
+                        input.next_token();
+                    }
+                }
+            } else {
+                return Err(SyntaxError { msg: "unexpected end-of-file".to_string() }.into());
+            }
+
+            // Last statement doesn't need to be terminated with a new line.
+            if input.match_token(T::RightBrace) {
+                println!("RIGHT BRACE BREAK");
+                break;
+            }
+        }
+
+        // Comments are allowed immediately after method definition.
+        // Comment::ignore(input);
+
+        // Don't allow any other statements or expressions after
+        // class definition.
+        if !input.match_token(T::Newline) {
+            return Err(SyntaxError {
+                msg: "expected new line after method definition".to_string(),
+            }
+            .into());
+        }
+
+        println!("Method::parse_body done");
+
+        Ok(())
     }
 }
 

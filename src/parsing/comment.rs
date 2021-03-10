@@ -26,17 +26,13 @@ impl Comment {
         input.reset_peek();
 
         loop {
-            input.match_lines();
-
-            if let Some(token_ty) = input.peek().map(|t| t.ty) {
-                if let T::CommentLine | T::Comment | T::CommentLeft | T::CommentRight = token_ty {
-                    input.next_token();
-                } else {
-                    // Encountered something other than a comment.
-                    break;
-                }
+            if input.match_token(T::CommentLine)
+                || input.match_token(T::Comment)
+                || input.match_token(T::CommentLeft)
+                || input.match_token(T::CommentRight)
+            {
+                continue;
             } else {
-                // EOF
                 break;
             }
         }

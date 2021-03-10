@@ -77,6 +77,7 @@ impl<'a> TokenStream<'a> {
                 if is_match {
                     self.lexer.next();
                 }
+                self.lexer.reset_peek();
                 is_match
             }
             None => {
@@ -118,6 +119,7 @@ impl<'a> TokenStream<'a> {
             if token.ty == TokenType::Newline {
                 self.lexer.next();
             } else {
+                self.lexer.reset_peek();
                 return;
             }
         }

@@ -1,5 +1,3 @@
-#[deprecated]
-pub mod ast;
 mod lex;
 mod parsing;
 mod token;
