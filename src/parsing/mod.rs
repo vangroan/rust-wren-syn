@@ -8,11 +8,13 @@ use std::{
     fmt, ops,
 };
 
+mod comment;
 mod errors;
 mod expr;
 mod module;
 mod stmt;
 
+pub use comment::*;
 pub use errors::{ParseError, ParseResult, SyntaxError};
 pub use expr::*;
 pub use module::*;

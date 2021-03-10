@@ -1,4 +1,4 @@
-use std::{convert::TryFrom, error::Error, fmt, str::CharIndices};
+use std::{convert::TryFrom, error::Error, fmt, slice::SliceIndex, str::CharIndices};
 
 use itertools::{multipeek, MultiPeek};
 use smol_str::SmolStr;
@@ -29,13 +29,29 @@ pub struct Span {
 /// implicitly by calling one of the consuming methods.
 pub struct TokenStream<'a> {
     lexer: MultiPeek<Lexer<'a>>,
+    /// Keep reference to the source so the parser can
+    /// slice fragments from it.
+    source: &'a str,
 }
 
 impl<'a> TokenStream<'a> {
     pub fn new(lexer: Lexer<'a>) -> Self {
         Self {
+            source: lexer.orig,
             lexer: multipeek(lexer),
         }
+    }
+
+    /// Slice a fragment of source code.
+    ///
+    /// Returns `None` if the given index is out
+    /// of bounds.
+    #[inline]
+    pub fn fragment<I>(&self, index: I) -> Option<&str>
+    where
+        I: SliceIndex<str, Output = str>,
+    {
+        self.source.get(index)
     }
 
     /// Consumes the current token regardless of type.
@@ -139,6 +155,10 @@ impl fmt::Display for TokenError {
 }
 
 pub struct Lexer<'a> {
+    /// Keep reference to the source so the parser can
+    /// slice fragments from it.
+    orig: &'a str,
+
     /// Iterator over UTF-8 encoded source code.
     ///
     /// The `MultiPeek` wrapper allows for arbitrary lookahead by consuming
@@ -180,6 +200,7 @@ impl<'a> Lexer<'a> {
     /// Returns `None` when the string is empty.
     pub fn new(source: &'a str) -> Self {
         Self {
+            orig: source,
             source: multipeek(source.char_indices()),
             source_size: source.len(),
             token_start: 0,
@@ -511,7 +532,8 @@ impl<'a> Lexer<'a> {
         // Consume until EOF.
         while let Some((_, c)) = self.peek_char() {
             // Comment is anything until new line.
-            if c == '\n' || c == '\0' {
+            // Remember windows carriage return -__-
+            if c == '\r' || c == '\n' || c == '\0' {
                 // But don't consume the next character,
                 // we don't want the new line in the comment.
                 //

@@ -1,12 +1,13 @@
 //! Definition statements. Eg: `class`, `foreign`, `import`, `var`.
 use super::{
+    comment::Comment,
     errors::{ParseResult, SyntaxError},
     expr::Expr,
     Parse,
 };
 use crate::{
     lex::TokenStream,
-    token::{Ident, Token, KeywordType, TokenType},
+    token::{Ident, KeywordType, Token, TokenType},
 };
 
 /// Definition statement.
@@ -72,7 +73,7 @@ pub struct Method {
     /// Class fields are declared in methods.
     pub fields: Vec<Field>,
     /// Statements contained in the method's body.
-    /// 
+    ///
     /// Same parsing rules are `Module`.
     pub body: (),
 }
@@ -107,8 +108,6 @@ pub struct Signature {
     pub arity: u8,
 }
 
-
-
 /// Simple statement.
 ///
 /// Definition statements can only appear at the top level of the curly braces.
@@ -123,6 +122,9 @@ pub enum SimpleStmt {
     For,
     If,
     Return,
+    /// FIXME: Is this the right place to put block body level comments?
+    ///        We will probably only find out when implementing the language server.
+    Comment(Comment),
     /// Expression statement.
     Expr(Expr),
 }
@@ -266,7 +268,7 @@ impl Parse for Method {
             is_static: input.match_token(T::Keyword(K::Static)),
             is_construct: input.match_token(T::Keyword(K::Construct)),
         };
-        
+
         if modifiers.is_construct && modifiers.is_static {
             return Err(SyntaxError {
                 msg: "constructor cannot be static".to_string(),
@@ -302,7 +304,10 @@ impl Method {
         if input.match_token(T::Eq) {
             // Property setter.
             if modifiers.is_construct {
-                return Err(SyntaxError { msg: "constructor cannot be a setter".to_string() }.into());
+                return Err(SyntaxError {
+                    msg: "constructor cannot be a setter".to_string(),
+                }
+                .into());
             }
             todo!("parse setter's one param");
         } else {
@@ -317,7 +322,10 @@ impl Method {
             } else {
                 println!("No params token type: {:?}", next_token.ty);
                 if modifiers.is_construct {
-                    return Err(SyntaxError { msg: "constructor cannot be a getter".to_string() }.into());
+                    return Err(SyntaxError {
+                        msg: "constructor cannot be a getter".to_string(),
+                    }
+                    .into());
                 }
                 Default::default()
             };
@@ -358,7 +366,6 @@ impl Method {
         use TokenType as T;
 
         input.consume(T::LeftParen)?;
-        
 
         // Parentheses can be empty.
         if input.match_token(T::RightParen) {
@@ -382,7 +389,9 @@ impl Method {
             // TODO: Validate number of parameters against MAX_PARAMETERS
             let token = input.consume(TokenType::Ident)?;
             params.push(Param {
-                ident: token.ident.clone().ok_or_else(|| SyntaxError { msg: "parameter token has no identifier".to_string() })?,
+                ident: token.ident.clone().ok_or_else(|| SyntaxError {
+                    msg: "parameter token has no identifier".to_string(),
+                })?,
                 token,
             });
 
@@ -401,12 +410,42 @@ impl Method {
 
 impl Parse for SimpleStmt {
     fn parse(input: &mut TokenStream) -> ParseResult<Self> {
+        println!("SimpleStmt::parse");
+        use TokenType as T;
+
+        input.reset_peek();
+
         // TODO: Break
         // TODO: Continue
         // TODO: For
         // TODO: If
         // TODO: Return
         // Expression statement
-        Expr::parse(input).map(SimpleStmt::Expr)
+        match input.peek().map(|t| t.ty).ok_or_else(|| SyntaxError {
+            msg: "unexpected end of file".to_string(),
+        })? {
+            T::CommentLine => {
+                let token = input.consume(T::CommentLine)?;
+                let literal = token
+                    .lit
+                    .as_ref()
+                    .and_then(|lit| lit.comment())
+                    .ok_or_else(|| SyntaxError {
+                        msg: "comment token has no literal".to_string(),
+                    })?;
+
+                let span = token.span;
+
+                println!(
+                    "Fragment: {}",
+                    input.fragment(span.start..(span.start + span.count)).unwrap()
+                );
+
+                Ok(SimpleStmt::Comment(Comment {
+                    text: literal.to_string(),
+                }))
+            }
+            _ => Expr::parse(input).map(SimpleStmt::Expr),
+        }
     }
 }

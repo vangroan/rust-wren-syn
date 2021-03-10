@@ -157,6 +157,13 @@ impl fmt::Display for KeywordType {
 }
 
 /// Literal value.
+///
+/// FIXME: Copying data from the source string
+///        to a literal token is pretty wrong.
+///        The whole source is available to the
+///        parser via Lexer in TokenStream.
+///        We can slice the source using spans
+///        recorded in the tokens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lit {
     Number(String),
@@ -169,6 +176,14 @@ impl Lit {
     pub fn number(&self) -> Option<&str> {
         match self {
             Lit::Number(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn comment(&self) -> Option<&str> {
+        match self {
+            Lit::Comment(s) => Some(s),
             _ => None,
         }
     }

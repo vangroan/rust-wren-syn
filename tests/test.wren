@@ -1,6 +1,7 @@
 
+// Document string
 class Foo is Bar {
-    construct new(a, b) {}
+    construct new(one, two) {}
 }
 
 class Baz {}
