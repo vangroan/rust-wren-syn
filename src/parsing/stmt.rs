@@ -65,6 +65,15 @@ pub struct ClassMembers {
     pub ops: Vec<()>,
 }
 
+#[derive(Debug)]
+pub enum ClassMember {
+    Comment(Comment),
+    Constructor(Method),
+    Property(Method),
+    Method(Method),
+    Operator(Method),
+}
+
 /// Method declaration, inside a class body.
 #[derive(Debug)]
 pub struct Method {
@@ -224,34 +233,55 @@ impl Parse for ClassMembers {
 
         let mut construct: Option<Method> = None;
         let mut methods = vec![];
+        let mut comments = vec![];
 
         while !input.match_token(T::RightBrace) {
-            input.match_lines();
+            input.reset_peek();
+            let token_ty = input.peek().map(|t| t.ty).ok_or_else(|| SyntaxError {
+                msg: "unexpected end of file".to_string(),
+            })?;
 
-            Comment::ignore(input);
-            input.match_lines();
+            match token_ty {
+                T::EOF => {
+                    return Err(SyntaxError {
+                        msg: "unexpected end-of-file".to_string(),
+                    }
+                    .into())
+                }
+                T::Newline => {
+                    input.next_token();
+                    continue;
+                }
+                T::CommentLine | T::CommentLeft => {
+                    comments.push(Comment::parse(input)?);
+                }
+                _ => {
+                    let mut method = Method::parse(input)?;
 
-            let method = Method::parse(input)?;
+                    // Flush all the preceding comments.
+                    method.comments.extend(comments.drain(..));
 
-            // TODO: Extract fields from method.
+                    if method.modifiers.is_construct {
+                        construct = Some(method);
+                    } else {
+                        methods.push(method);
+                    }
 
-            if method.modifiers.is_construct {
-                construct = Some(method);
-            } else {
-                methods.push(method);
+                    // Don't require a newline after the last member definition.
+                    if input.match_token(T::RightBrace) {
+                        break;
+                    }
+
+                    // Members must be separated with new lines.
+                    input.match_token(T::Newline);
+                }
             }
-
-            // Don't require a newline after the last member definition.
-            if input.match_token(T::RightBrace) {
-                break;
-            }
-
-            // Members must be separated with new lines.
-            input.match_token(T::Newline);
         }
 
         // Comments are allowed immediately after class definition.
-        // Comment::ignore(input);
+        // But we don't add them to the AST yet.
+        // FIXME: Append trailing comments to class definition.
+        Comment::ignore(input);
 
         // Don't allow any other statements or expressions after
         // class definition.
@@ -428,7 +458,12 @@ impl Method {
         while !input.match_token(T::RightBrace) {
             if let Some(token) = input.peek() {
                 match token.ty {
-                    T::EOF => return Err(SyntaxError { msg: "unexpected end-of-file".to_string() }.into()),
+                    T::EOF => {
+                        return Err(SyntaxError {
+                            msg: "unexpected end-of-file".to_string(),
+                        }
+                        .into())
+                    }
                     T::RightBrace => {
                         // Prevent terminal token from being consumed.
                         input.match_token(T::RightBrace);
@@ -441,7 +476,10 @@ impl Method {
                     }
                 }
             } else {
-                return Err(SyntaxError { msg: "unexpected end-of-file".to_string() }.into());
+                return Err(SyntaxError {
+                    msg: "unexpected end-of-file".to_string(),
+                }
+                .into());
             }
 
             // Last statement doesn't need to be terminated with a new line.
@@ -485,26 +523,8 @@ impl Parse for SimpleStmt {
         match input.peek().map(|t| t.ty).ok_or_else(|| SyntaxError {
             msg: "unexpected end of file".to_string(),
         })? {
-            T::CommentLine => {
-                let token = input.consume(T::CommentLine)?;
-                let literal = token
-                    .lit
-                    .as_ref()
-                    .and_then(|lit| lit.comment())
-                    .ok_or_else(|| SyntaxError {
-                        msg: "comment token has no literal".to_string(),
-                    })?;
-
-                let span = token.span;
-
-                println!(
-                    "Fragment: {}",
-                    input.fragment(span.start..(span.start + span.count)).unwrap()
-                );
-
-                Ok(SimpleStmt::Comment(Comment {
-                    text: literal.to_string(),
-                }))
+            T::CommentLine | T::CommentLeft => {
+                Ok(SimpleStmt::Comment(Comment::parse(input)?))
             }
             _ => Expr::parse(input).map(SimpleStmt::Expr),
         }

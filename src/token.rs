@@ -43,6 +43,23 @@ pub enum TokenType {
     EOF,
 }
 
+impl TokenType {
+    /// Indicates whether this token is the start of a comment.
+    #[inline]
+    pub fn is_comment_start(self) -> bool {
+        self == TokenType::CommentLine || self == TokenType::CommentLeft
+    }
+
+    /// Indicates whether this token is part of a comment.
+    #[inline]
+    pub fn is_comment(self) -> bool {
+        self == TokenType::CommentLine
+            || self == TokenType::CommentLeft
+            || self == TokenType::Comment
+            || self == TokenType::CommentRight
+    }
+}
+
 impl fmt::Display for TokenType {
     #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

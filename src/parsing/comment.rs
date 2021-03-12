@@ -1,9 +1,46 @@
 //! Comment parsing.
+use super::{
+    errors::{ParseResult, SyntaxError},
+    Parse,
+};
 use crate::{lex::TokenStream, token::TokenType};
 
 #[derive(Debug)]
 pub struct Comment {
     pub text: String,
+}
+
+impl Parse for Comment {
+    fn parse(input: &mut TokenStream) -> ParseResult<Self> {
+        use TokenType as T;
+
+        if input.match_token(T::CommentLeft) {
+            // Block comment
+            todo!("block comments not implemented yet");
+        } else {
+            // Line comment
+            let token = input.consume(T::CommentLine)?;
+            let literal = token
+                .lit
+                .as_ref()
+                .and_then(|lit| lit.comment())
+                .ok_or_else(|| SyntaxError {
+                    msg: "comment token has no literal".to_string(),
+                })?;
+
+            let span = token.span;
+
+            // TODO: Use fragments for literals to avoid string copies.
+            println!(
+                "Fragment: {}",
+                input.fragment(span.start..(span.start + span.count)).unwrap()
+            );
+
+            Ok(Comment {
+                text: literal.to_string(),
+            })
+        }
+    }
 }
 
 impl Comment {

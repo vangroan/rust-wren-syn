@@ -65,6 +65,8 @@ fn test_class_docstring() {
     // ```
     class Foo {
         // Creates a `Foo` using `value`.
+        // Second line
+        // Third line
         construct new(value) {
             _value = value
         }
