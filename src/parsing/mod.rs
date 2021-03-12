@@ -1,6 +1,4 @@
-use crate::{
-    lex::TokenStream,
-};
+use crate::lex::TokenStream;
 
 mod comment;
 mod errors;
@@ -18,4 +16,3 @@ pub use stmt::*;
 pub trait Parse: Sized {
     fn parse(input: &mut TokenStream) -> ParseResult<Self>;
 }
-
