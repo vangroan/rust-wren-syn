@@ -49,11 +49,11 @@ impl Comment {
     ///
     /// Since comments are not discarded during
     /// tokenisation, they end up as tokens in the parser
-    /// and generally get ni the way.
+    /// and generally get in the way.
     ///
     /// Comments should be inserted into the generated
     /// abstract-syntax-tree, but it's not exactly clear
-    /// how to handle each parsin case.
+    /// how to handle each parsing case.
     ///
     /// Until the day that all comment cases can be handled,
     /// we need to ignore comments during parsing.
