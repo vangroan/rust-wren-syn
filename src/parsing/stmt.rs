@@ -1,5 +1,6 @@
 //! Definition statements. Eg: `class`, `foreign`, `import`, `var`.
 use super::{
+    block::BlockBody,
     comment::Comment,
     errors::{ParseResult, SyntaxError},
     expr::Expr,
@@ -87,7 +88,7 @@ pub struct Method {
     /// Statements contained in the method's body.
     ///
     /// Same parsing rules are `Module`.
-    pub body: (),
+    pub body: BlockBody,
 }
 
 #[derive(Debug)]
@@ -449,11 +450,33 @@ impl Method {
     }
 
     /// TODO: Parse method body
-    fn parse_body(input: &mut TokenStream) -> ParseResult<()> {
+    /// TODO: Should this move to `BodyBlock`?
+    fn parse_body(input: &mut TokenStream) -> ParseResult<BlockBody> {
         println!("Method::parse_body");
         use TokenType as T;
 
         input.consume(T::LeftBrace)?;
+
+        // When the opening brace is immediately followed by
+        // a new line, the body is parsed as a list of statements.
+        //
+        // When the body is all in one line, then it's an expression.
+        if !input.match_token(T::Newline) {
+            let expr = Expr::parse(input)?;
+
+            // Expression body must be terminated with a closing brace.
+            // New line is not allowed.
+            if !input.match_token(T::RightBrace) {
+                return Err(SyntaxError {
+                    msg: "expected '}' at end of block".to_string(),
+                }
+                .into());
+            }
+
+            return Ok(BlockBody::Expr(expr));
+        }
+
+        let mut stmts = vec![];
 
         while !input.match_token(T::RightBrace) {
             if let Some(token) = input.peek() {
@@ -471,8 +494,9 @@ impl Method {
                     }
                     _ => {
                         // TODO: Parse statements in method body
-                        println!("########### IGNORE");
-                        input.next_token();
+                        // println!("########### IGNORE");
+                        // input.next_token();
+                        stmts.push(DefStmt::parse(input)?);
                     }
                 }
             } else {
@@ -503,7 +527,8 @@ impl Method {
 
         println!("Method::parse_body done");
 
-        Ok(())
+        Ok(BlockBody::Stmts(stmts))
+        // todo!()
     }
 }
 

@@ -44,9 +44,10 @@ impl Precedence {
         use crate::token::TokenType as T;
 
         match token_ty {
-            T::Number => Precedence::None,
+            T::Number | T::Field | T::StaticField => Precedence::None,
             T::Add | T::Sub => Precedence::Term,
             T::Mul | T::Div => Precedence::Factor,
+            T::Eq => Precedence::Assignment,
             _ => Precedence::None,
         }
     }
@@ -106,9 +107,12 @@ enum Associativity {
 }
 
 impl Associativity {
-    fn of(_token_ty: TokenType) -> Associativity {
-        // Wren doesn't seem to have any right-associative operators.
-        Associativity::Left
+    fn of(token_ty: TokenType) -> Associativity {
+        if token_ty == TokenType::Eq {
+            Associativity::Right
+        } else {
+            Associativity::Left
+        }
     }
 }
 
@@ -215,6 +219,7 @@ impl Expr {
 
         match token.ty {
             T::Number => Ok(Expr::Num(Self::parse_number_literal(token)?)),
+            T::Field | T::StaticField => todo!("parse_field"),
             T::Sub => {
                 // Negate
                 let right = Self::parse_precedence(input, Precedence::Unary)?;
@@ -264,7 +269,7 @@ impl Expr {
         let right = Self::parse_precedence(input, precedence + binding_power)?;
 
         match token.ty {
-            T::Add | T::Sub | T::Mul | T::Div => Ok(Expr::BinOp(BinaryOp {
+            T::Add | T::Sub | T::Mul | T::Div | T::Eq => Ok(Expr::BinOp(BinaryOp {
                 operator: token,
                 lhs: Box::new(left),
                 rhs: Box::new(right),
