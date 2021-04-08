@@ -2,7 +2,7 @@
 use super::{Parse, ParseResult, SyntaxError};
 use crate::{
     lex::TokenStream,
-    token::{Token, TokenType},
+    token::{Ident, Token, TokenType},
 };
 use std::{
     convert::{Infallible, TryFrom},
@@ -123,6 +123,8 @@ pub enum Expr {
     Str(StrLit),
     UnOp(UnaryOp),
     BinOp(BinaryOp),
+    Assign(AssignOp),
+    AccessField(AccessField),
 }
 
 /// Number literal.
@@ -166,9 +168,22 @@ pub struct BinaryOp {
     pub rhs: Box<Expr>,
 }
 
+#[derive(Debug)]
+pub struct AssignOp {
+    pub operator: Token,
+    pub lhs: Box<Expr>,
+    pub rhs: Box<Expr>,
+}
+
+/// Class field being accessed/read.
+#[derive(Debug)]
+pub struct AccessField {
+    pub ident: Ident,
+}
+
 impl Parse for Expr {
     fn parse(input: &mut TokenStream) -> ParseResult<Expr> {
-        Expr::parse_precedence(input, Precedence::None)
+        Expr::parse_precedence(input, Precedence::Lowest)
     }
 }
 
@@ -219,7 +234,7 @@ impl Expr {
 
         match token.ty {
             T::Number => Ok(Expr::Num(Self::parse_number_literal(token)?)),
-            T::Field | T::StaticField => todo!("parse_field"),
+            T::Field | T::StaticField => Self::parse_field(input, token),
             T::Sub => {
                 // Negate
                 let right = Self::parse_precedence(input, Precedence::Unary)?;
@@ -309,6 +324,37 @@ impl Expr {
             notation: Notation::Decimal,
             value,
         })
+    }
+
+    fn parse_field(input: &mut TokenStream, token: Token) -> ParseResult<Expr> {
+        use TokenType as T;
+
+        assert_eq!(token.ty, T::Field);
+
+        match input.consume(T::Eq) {
+            Ok(next_token) => {
+                if next_token.ty == T::Eq {
+                    // Assignment
+                    let right = Expr::parse_precedence(input, Precedence::Lowest);
+
+                    Ok(Expr::Assign(AssignOp {
+                        operator: next_token,
+                        lhs: todo!(),
+                        rhs: todo!(),
+                    }))
+                } else {
+                    Ok(Expr::AccessField(AccessField {
+                        ident: token.ident.ok_or_else(|| SyntaxError {
+                            msg: "field token has no identifier".to_string(),
+                        })?,
+                    }))
+                }
+            }
+            Err(_) => Err(SyntaxError {
+                msg: "unexpected end-of-file".to_string(),
+            }
+            .into()),
+        }
     }
 }
 
