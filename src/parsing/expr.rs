@@ -125,6 +125,7 @@ pub enum Expr {
     BinOp(BinaryOp),
     Assign(AssignOp),
     AccessField(AccessField),
+    Variable(VarAccess),
 }
 
 /// Number literal.
@@ -171,13 +172,25 @@ pub struct BinaryOp {
 #[derive(Debug)]
 pub struct AssignOp {
     pub operator: Token,
-    pub lhs: Box<Expr>,
+    pub lhs: AssignField,
     pub rhs: Box<Expr>,
 }
 
 /// Class field being accessed/read.
 #[derive(Debug)]
 pub struct AccessField {
+    pub ident: Ident,
+}
+
+/// Class field being assigned/written.
+#[derive(Debug)]
+pub struct AssignField {
+    pub ident: Ident,
+}
+
+/// Variable accessed/read.
+#[derive(Debug)]
+pub struct VarAccess {
     pub ident: Ident,
 }
 
@@ -235,6 +248,7 @@ impl Expr {
         match token.ty {
             T::Number => Ok(Expr::Num(Self::parse_number_literal(token)?)),
             T::Field | T::StaticField => Self::parse_field(input, token),
+            T::Ident => Self::parse_var(input, token),
             T::Sub => {
                 // Negate
                 let right = Self::parse_precedence(input, Precedence::Unary)?;
@@ -326,34 +340,52 @@ impl Expr {
         })
     }
 
-    fn parse_field(input: &mut TokenStream, token: Token) -> ParseResult<Expr> {
+    fn parse_var(_input: &mut TokenStream, left: Token) -> ParseResult<Expr> {
+        println!("Expr::parse_var");
+
+        debug_assert_eq!(left.ty, TokenType::Ident);
+
+        // TODO: Method calls and dot (.) accessor.
+        Ok(Expr::Variable(VarAccess {
+            ident: left.ident.ok_or_else(|| SyntaxError {
+                msg: "variable token has no identifier".to_string(),
+            })?,
+        }))
+    }
+
+    fn parse_field(input: &mut TokenStream, left: Token) -> ParseResult<Expr> {
+        println!("Expr::parse_field");
+
         use TokenType as T;
 
-        assert_eq!(token.ty, T::Field);
+        debug_assert_eq!(left.ty, T::Field);
 
-        match input.consume(T::Eq) {
-            Ok(next_token) => {
-                if next_token.ty == T::Eq {
-                    // Assignment
-                    let right = Expr::parse_precedence(input, Precedence::Lowest);
+        input.reset_peek();
+        let next_token_ty = input.peek().map(|t| t.ty).ok_or_else(|| SyntaxError {
+            msg: "unexpected end-of-file".to_string(),
+        })?;
+        match next_token_ty {
+            T::Eq => {
+                let operator = input.consume(T::Eq)?;
 
-                    Ok(Expr::Assign(AssignOp {
-                        operator: next_token,
-                        lhs: todo!(),
-                        rhs: todo!(),
-                    }))
-                } else {
-                    Ok(Expr::AccessField(AccessField {
-                        ident: token.ident.ok_or_else(|| SyntaxError {
-                            msg: "field token has no identifier".to_string(),
+                // Assignment
+                let right = Expr::parse_precedence(input, Precedence::Lowest)?;
+
+                Ok(Expr::Assign(AssignOp {
+                    operator,
+                    lhs: AssignField {
+                        ident: left.ident.ok_or_else(|| SyntaxError {
+                            msg: "lhs token has no identifier".to_string(),
                         })?,
-                    }))
-                }
+                    },
+                    rhs: Box::new(right),
+                }))
             }
-            Err(_) => Err(SyntaxError {
-                msg: "unexpected end-of-file".to_string(),
-            }
-            .into()),
+            _ => Ok(Expr::AccessField(AccessField {
+                ident: left.ident.ok_or_else(|| SyntaxError {
+                    msg: "field token has no identifier".to_string(),
+                })?,
+            })),
         }
     }
 }

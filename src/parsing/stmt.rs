@@ -480,12 +480,18 @@ impl Method {
 
         while !input.match_token(T::RightBrace) {
             if let Some(token) = input.peek() {
+                println!("Method::parse_body {:?}", token.ty);
                 match token.ty {
                     T::EOF => {
                         return Err(SyntaxError {
                             msg: "unexpected end-of-file".to_string(),
                         }
                         .into())
+                    }
+                    T::Newline => {
+                        // Empty line
+                        input.consume(T::Newline)?;
+                        continue;
                     }
                     T::RightBrace => {
                         // Prevent terminal token from being consumed.

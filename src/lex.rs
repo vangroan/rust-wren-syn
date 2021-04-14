@@ -364,14 +364,16 @@ impl<'a> Lexer<'a> {
     }
 
     fn make_token(&mut self, token_ty: TokenType) -> Token {
+        use TokenType as T;
+
         println!("make_token: {:?} {:?}", self.current, token_ty);
 
-        let ident = if token_ty == TokenType::Ident || matches!(token_ty, TokenType::Keyword(_)) {
-            // Identifier name was consumed and stored in the buffer.
-            let name = self.drain_buffer();
-            Some(Ident { name })
-        } else {
-            None
+        let ident = match token_ty {
+            T::Ident | T::Field | T::StaticField | T::Keyword(_) => {
+                let name = self.drain_buffer();
+                Some(Ident { name })
+            }
+            _ => None,
         };
 
         // Literals
@@ -409,6 +411,7 @@ impl<'a> Lexer<'a> {
             self.start_buffer();
         }
 
+        self.reset_peek();
         while let Some((_, c)) = self.peek_char() {
             if Self::is_ident(c) || c.is_ascii_digit() {
                 self.buf.push(c);
