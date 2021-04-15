@@ -274,10 +274,13 @@ impl Parse for ClassMembers {
                     }
 
                     // Members must be separated with new lines.
+                    println!("Member trail");
                     input.match_token(T::Newline);
                 }
             }
         }
+
+        println!("Class members trail");
 
         // Comments are allowed immediately after class definition.
         // But we don't add them to the AST yet.
@@ -565,6 +568,7 @@ impl Parse for SimpleStmt {
                 // Expression does not consume terminal new line.
                 // TODO: Syntax trivia: new line trail
                 input.match_token(T::Newline);
+                println!("SimpleStmt Expr trail");
                 stmt_result
             }
         }
