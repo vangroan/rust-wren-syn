@@ -554,8 +554,19 @@ impl Parse for SimpleStmt {
         match input.peek().map(|t| t.ty).ok_or_else(|| SyntaxError {
             msg: "unexpected end of file".to_string(),
         })? {
-            T::CommentLine | T::CommentLeft => Ok(SimpleStmt::Comment(Comment::parse(input)?)),
-            _ => Expr::parse(input).map(SimpleStmt::Expr),
+            T::CommentLine | T::CommentLeft => {
+                let stmt_result = Comment::parse(input).map(SimpleStmt::Comment);
+                // TODO: Syntax trivia: new line trail
+                input.match_token(T::Newline);
+                stmt_result
+            }
+            _ => {
+                let stmt_result = Expr::parse(input).map(SimpleStmt::Expr);
+                // Expression does not consume terminal new line.
+                // TODO: Syntax trivia: new line trail
+                input.match_token(T::Newline);
+                stmt_result
+            }
         }
     }
 }
