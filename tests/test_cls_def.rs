@@ -68,6 +68,7 @@ fn test_class_docstring() {
         // Second line
         // Third line
         construct new(value) {
+            // Comment in function
             _value = value
         }
     }

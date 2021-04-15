@@ -287,6 +287,13 @@ impl<'a> Lexer<'a> {
                     ' ' | '\t' | '\r' => {
                         self.consume_whitespace();
                     }
+                    '_' => {
+                        if let Some((_, '_')) = self.peek_char() {
+                            return Some(self.consume_static_field(TokenType::StaticField));
+                        } else {
+                            return Some(self.consume_field(TokenType::Field));
+                        }
+                    }
                     _ => {
                         if c.is_ascii_digit() {
                             if let Some((_, next_char)) = self.peek_char() {
@@ -297,7 +304,7 @@ impl<'a> Lexer<'a> {
                             // Decimal or scientific notation
                             return Some(self.consume_number(TokenType::Number));
                         } else if Self::is_ident(c) {
-                            return Some(self.consume_ident(TokenType::Ident));
+                            return Some(self.consume_ident(TokenType::Ident, true));
                         } else {
                             // TODO: Error
                             // error: unknown start of token: {}
@@ -357,14 +364,16 @@ impl<'a> Lexer<'a> {
     }
 
     fn make_token(&mut self, token_ty: TokenType) -> Token {
+        use TokenType as T;
+
         println!("make_token: {:?} {:?}", self.current, token_ty);
 
-        let ident = if token_ty == TokenType::Ident || matches!(token_ty, TokenType::Keyword(_)) {
-            // Identifier name was consumed and stored in the buffer.
-            let name = self.drain_buffer();
-            Some(Ident { name })
-        } else {
-            None
+        let ident = match token_ty {
+            T::Ident | T::Field | T::StaticField | T::Keyword(_) => {
+                let name = self.drain_buffer();
+                Some(Ident { name })
+            }
+            _ => None,
         };
 
         // Literals
@@ -397,9 +406,12 @@ impl<'a> Lexer<'a> {
         c.is_ascii_alphabetic() || c == '_'
     }
 
-    fn consume_ident(&mut self, token_ty: TokenType) -> Token {
-        self.start_buffer();
+    fn consume_ident(&mut self, token_ty: TokenType, start_buffer: bool) -> Token {
+        if start_buffer {
+            self.start_buffer();
+        }
 
+        self.reset_peek();
         while let Some((_, c)) = self.peek_char() {
             if Self::is_ident(c) || c.is_ascii_digit() {
                 self.buf.push(c);
@@ -416,6 +428,16 @@ impl<'a> Lexer<'a> {
         } else {
             self.make_token(token_ty)
         }
+    }
+
+    fn consume_field(&mut self, token_ty: TokenType) -> Token {
+        self.start_buffer();
+        self.consume_ident(token_ty, false)
+    }
+
+    fn consume_static_field(&mut self, token_ty: TokenType) -> Token {
+        self.start_buffer();
+        self.consume_ident(token_ty, false)
     }
 
     fn consume_string(&mut self, token_ty: TokenType) -> Option<Token> {

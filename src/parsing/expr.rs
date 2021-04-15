@@ -2,7 +2,7 @@
 use super::{Parse, ParseResult, SyntaxError};
 use crate::{
     lex::TokenStream,
-    token::{Token, TokenType},
+    token::{Ident, Token, TokenType},
 };
 use std::{
     convert::{Infallible, TryFrom},
@@ -11,6 +11,8 @@ use std::{
 
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 enum Precedence {
+    /// Tokens that terminate an expression
+    /// should have a precedence of `None`.
     None = 0,
     Lowest = 1,
     Assignment = 2,    // =
@@ -44,9 +46,10 @@ impl Precedence {
         use crate::token::TokenType as T;
 
         match token_ty {
-            T::Number => Precedence::None,
+            T::Number | T::Field | T::StaticField => Precedence::Lowest,
             T::Add | T::Sub => Precedence::Term,
             T::Mul | T::Div => Precedence::Factor,
+            T::Eq => Precedence::Assignment,
             _ => Precedence::None,
         }
     }
@@ -106,9 +109,12 @@ enum Associativity {
 }
 
 impl Associativity {
-    fn of(_token_ty: TokenType) -> Associativity {
-        // Wren doesn't seem to have any right-associative operators.
-        Associativity::Left
+    fn of(token_ty: TokenType) -> Associativity {
+        if token_ty == TokenType::Eq {
+            Associativity::Right
+        } else {
+            Associativity::Left
+        }
     }
 }
 
@@ -119,6 +125,9 @@ pub enum Expr {
     Str(StrLit),
     UnOp(UnaryOp),
     BinOp(BinaryOp),
+    Assign(AssignOp),
+    AccessField(AccessField),
+    Variable(VarAccess),
 }
 
 /// Number literal.
@@ -162,9 +171,34 @@ pub struct BinaryOp {
     pub rhs: Box<Expr>,
 }
 
+#[derive(Debug)]
+pub struct AssignOp {
+    pub operator: Token,
+    pub lhs: AssignField,
+    pub rhs: Box<Expr>,
+}
+
+/// Class field being accessed/read.
+#[derive(Debug)]
+pub struct AccessField {
+    pub ident: Ident,
+}
+
+/// Class field being assigned/written.
+#[derive(Debug)]
+pub struct AssignField {
+    pub ident: Ident,
+}
+
+/// Variable accessed/read.
+#[derive(Debug)]
+pub struct VarAccess {
+    pub ident: Ident,
+}
+
 impl Parse for Expr {
     fn parse(input: &mut TokenStream) -> ParseResult<Expr> {
-        Expr::parse_precedence(input, Precedence::None)
+        Expr::parse_precedence(input, Precedence::Lowest)
     }
 }
 
@@ -211,10 +245,13 @@ impl Expr {
     ///
     /// This function is analogous to a parselet.
     fn parse_prefix(input: &mut TokenStream, token: Token) -> ParseResult<Expr> {
+        println!("Expr::parse_prefix");
         use crate::token::TokenType as T;
 
         match token.ty {
             T::Number => Ok(Expr::Num(Self::parse_number_literal(token)?)),
+            T::Field | T::StaticField => Self::parse_field(input, token),
+            T::Ident => Self::parse_var(input, token),
             T::Sub => {
                 // Negate
                 let right = Self::parse_precedence(input, Precedence::Unary)?;
@@ -236,6 +273,7 @@ impl Expr {
     ///
     /// Includes non-obvious tokens like opening parentheses `(`.
     fn parse_infix(input: &mut TokenStream, left: Expr, token: Token) -> ParseResult<Expr> {
+        println!("Expr::parse_infix");
         use TokenType as T;
 
         let precedence = Precedence::of(token.ty);
@@ -264,7 +302,7 @@ impl Expr {
         let right = Self::parse_precedence(input, precedence + binding_power)?;
 
         match token.ty {
-            T::Add | T::Sub | T::Mul | T::Div => Ok(Expr::BinOp(BinaryOp {
+            T::Add | T::Sub | T::Mul | T::Div | T::Eq => Ok(Expr::BinOp(BinaryOp {
                 operator: token,
                 lhs: Box::new(left),
                 rhs: Box::new(right),
@@ -304,6 +342,55 @@ impl Expr {
             notation: Notation::Decimal,
             value,
         })
+    }
+
+    fn parse_var(_input: &mut TokenStream, left: Token) -> ParseResult<Expr> {
+        println!("Expr::parse_var");
+
+        debug_assert_eq!(left.ty, TokenType::Ident);
+
+        // TODO: Method calls and dot (.) accessor.
+        Ok(Expr::Variable(VarAccess {
+            ident: left.ident.ok_or_else(|| SyntaxError {
+                msg: "variable token has no identifier".to_string(),
+            })?,
+        }))
+    }
+
+    fn parse_field(input: &mut TokenStream, left: Token) -> ParseResult<Expr> {
+        println!("Expr::parse_field");
+
+        use TokenType as T;
+
+        debug_assert_eq!(left.ty, T::Field);
+
+        input.reset_peek();
+        let next_token_ty = input.peek().map(|t| t.ty).ok_or_else(|| SyntaxError {
+            msg: "unexpected end-of-file".to_string(),
+        })?;
+        match next_token_ty {
+            T::Eq => {
+                let operator = input.consume(T::Eq)?;
+
+                // Assignment
+                let right = Expr::parse_precedence(input, Precedence::Lowest)?;
+
+                Ok(Expr::Assign(AssignOp {
+                    operator,
+                    lhs: AssignField {
+                        ident: left.ident.ok_or_else(|| SyntaxError {
+                            msg: "lhs token has no identifier".to_string(),
+                        })?,
+                    },
+                    rhs: Box::new(right),
+                }))
+            }
+            _ => Ok(Expr::AccessField(AccessField {
+                ident: left.ident.ok_or_else(|| SyntaxError {
+                    msg: "field token has no identifier".to_string(),
+                })?,
+            })),
+        }
     }
 }
 

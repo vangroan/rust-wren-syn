@@ -1,5 +1,6 @@
 //! Definition statements. Eg: `class`, `foreign`, `import`, `var`.
 use super::{
+    block::BlockBody,
     comment::Comment,
     errors::{ParseResult, SyntaxError},
     expr::Expr,
@@ -87,7 +88,7 @@ pub struct Method {
     /// Statements contained in the method's body.
     ///
     /// Same parsing rules are `Module`.
-    pub body: (),
+    pub body: BlockBody,
 }
 
 #[derive(Debug)]
@@ -273,10 +274,13 @@ impl Parse for ClassMembers {
                     }
 
                     // Members must be separated with new lines.
+                    println!("Member trail");
                     input.match_token(T::Newline);
                 }
             }
         }
+
+        println!("Class members trail");
 
         // Comments are allowed immediately after class definition.
         // But we don't add them to the AST yet.
@@ -449,20 +453,48 @@ impl Method {
     }
 
     /// TODO: Parse method body
-    fn parse_body(input: &mut TokenStream) -> ParseResult<()> {
+    /// TODO: Should this move to `BodyBlock`?
+    fn parse_body(input: &mut TokenStream) -> ParseResult<BlockBody> {
         println!("Method::parse_body");
         use TokenType as T;
 
         input.consume(T::LeftBrace)?;
 
+        // When the opening brace is immediately followed by
+        // a new line, the body is parsed as a list of statements.
+        //
+        // When the body is all in one line, then it's an expression.
+        if !input.match_token(T::Newline) {
+            let expr = Expr::parse(input)?;
+
+            // Expression body must be terminated with a closing brace.
+            // New line is not allowed.
+            if !input.match_token(T::RightBrace) {
+                return Err(SyntaxError {
+                    msg: "expected '}' at end of block".to_string(),
+                }
+                .into());
+            }
+
+            return Ok(BlockBody::Expr(expr));
+        }
+
+        let mut stmts = vec![];
+
         while !input.match_token(T::RightBrace) {
             if let Some(token) = input.peek() {
+                println!("Method::parse_body {:?}", token.ty);
                 match token.ty {
                     T::EOF => {
                         return Err(SyntaxError {
                             msg: "unexpected end-of-file".to_string(),
                         }
                         .into())
+                    }
+                    T::Newline => {
+                        // Empty line
+                        input.consume(T::Newline)?;
+                        continue;
                     }
                     T::RightBrace => {
                         // Prevent terminal token from being consumed.
@@ -471,8 +503,9 @@ impl Method {
                     }
                     _ => {
                         // TODO: Parse statements in method body
-                        println!("########### IGNORE");
-                        input.next_token();
+                        // println!("########### IGNORE");
+                        // input.next_token();
+                        stmts.push(DefStmt::parse(input)?);
                     }
                 }
             } else {
@@ -503,7 +536,8 @@ impl Method {
 
         println!("Method::parse_body done");
 
-        Ok(())
+        Ok(BlockBody::Stmts(stmts))
+        // todo!()
     }
 }
 
@@ -523,8 +557,20 @@ impl Parse for SimpleStmt {
         match input.peek().map(|t| t.ty).ok_or_else(|| SyntaxError {
             msg: "unexpected end of file".to_string(),
         })? {
-            T::CommentLine | T::CommentLeft => Ok(SimpleStmt::Comment(Comment::parse(input)?)),
-            _ => Expr::parse(input).map(SimpleStmt::Expr),
+            T::CommentLine | T::CommentLeft => {
+                let stmt_result = Comment::parse(input).map(SimpleStmt::Comment);
+                // TODO: Syntax trivia: new line trail
+                input.match_token(T::Newline);
+                stmt_result
+            }
+            _ => {
+                let stmt_result = Expr::parse(input).map(SimpleStmt::Expr);
+                // Expression does not consume terminal new line.
+                // TODO: Syntax trivia: new line trail
+                input.match_token(T::Newline);
+                println!("SimpleStmt Expr trail");
+                stmt_result
+            }
         }
     }
 }

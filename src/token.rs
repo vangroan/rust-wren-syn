@@ -23,6 +23,11 @@ pub enum TokenType {
     Comma,        // ,
 
     Ident,
+    /// Identifier that starts with one underscore.
+    Field,
+    /// Identifier that starts with two underscores.
+    StaticField,
+    /// Identifier from the list of known reserved words.
     Keyword(KeywordType),
 
     Number,
@@ -82,6 +87,8 @@ impl fmt::Display for TokenType {
             T::NotEq            => write!(f, "!="),
             T::Comma            => write!(f, ","),
             T::Ident            => write!(f, "identifier"),
+            T::Field            => write!(f, "field"),
+            T::StaticField      => write!(f, "static field"),
             T::Keyword(keyword) => fmt::Display::fmt(keyword, f),
             T::Number           => write!(f, "number"),
             T::String           => write!(f, "string"),
