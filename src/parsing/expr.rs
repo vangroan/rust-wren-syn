@@ -11,6 +11,8 @@ use std::{
 
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 enum Precedence {
+    /// Tokens that terminate an expression
+    /// should have a precedence of `None`.
     None = 0,
     Lowest = 1,
     Assignment = 2,    // =
@@ -44,7 +46,7 @@ impl Precedence {
         use crate::token::TokenType as T;
 
         match token_ty {
-            T::Number | T::Field | T::StaticField => Precedence::None,
+            T::Number | T::Field | T::StaticField => Precedence::Lowest,
             T::Add | T::Sub => Precedence::Term,
             T::Mul | T::Div => Precedence::Factor,
             T::Eq => Precedence::Assignment,
@@ -243,6 +245,7 @@ impl Expr {
     ///
     /// This function is analogous to a parselet.
     fn parse_prefix(input: &mut TokenStream, token: Token) -> ParseResult<Expr> {
+        println!("Expr::parse_prefix");
         use crate::token::TokenType as T;
 
         match token.ty {
@@ -270,6 +273,7 @@ impl Expr {
     ///
     /// Includes non-obvious tokens like opening parentheses `(`.
     fn parse_infix(input: &mut TokenStream, left: Expr, token: Token) -> ParseResult<Expr> {
+        println!("Expr::parse_infix");
         use TokenType as T;
 
         let precedence = Precedence::of(token.ty);
