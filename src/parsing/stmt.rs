@@ -168,7 +168,7 @@ impl Parse for DefStmt {
                     K::Class => ClassDef::parse(input).map(Self::Class),
                     K::Foreign => todo!("foreign class definition statement"),
                     K::Import => todo!("import definition statement"),
-                    K::Var => VarDef::parse(input).map(Self::Var),
+                    K::Var => Self::parse_stmt::<VarDef>(input).map(Self::Var),
                     _ => Err(SyntaxError {
                         msg: "unexpected keyword".to_string(),
                     }
@@ -183,6 +183,25 @@ impl Parse for DefStmt {
             }
             .into())
         }
+    }
+}
+
+impl DefStmt {
+    fn parse_stmt<T: Parse>(input: &mut TokenStream) -> ParseResult<T> {
+        let stmt_result = T::parse(input);
+
+        // Consume trailing comments on the same line.
+        //
+        // TODO: In future store the comment in the statement as syntax trivia.
+        Comment::ignore(input);
+
+        // Consume trailing new line so they don't
+        // show up as empty statements.
+        //
+        // TODO: In future store the new line, optionally trailing comments, in statement as syntax trivia.
+        input.match_token(TokenType::Newline);
+
+        stmt_result
     }
 }
 

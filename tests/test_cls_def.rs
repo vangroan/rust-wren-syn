@@ -71,7 +71,7 @@ fn test_class_docstring() {
             // Comment in function
             _value = value
 
-            var foobar = value + _value + 2
+            var foobar = value + _value + 2 // Trailing comment
         }
     }
     "#,
