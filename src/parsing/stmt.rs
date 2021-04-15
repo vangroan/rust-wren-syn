@@ -41,7 +41,7 @@ pub enum DefStmt {
     Class(ClassDef),
     Foreign,
     Import,
-    Var,
+    Var(VarDef),
     Simple(SimpleStmt),
 }
 
@@ -121,6 +121,18 @@ pub struct Signature {
     pub arity: u8,
 }
 
+/// Variable definition, and optionally assignment.
+#[derive(Debug)]
+pub struct VarDef {
+    /// Variable name.
+    pub ident: Ident,
+    /// Value to be assigned to variable.
+    ///
+    /// Variable without a value can be declared
+    /// and implicit be assigned `null`.
+    pub rhs: Option<Expr>,
+}
+
 /// Simple statement.
 ///
 /// Definition statements can only appear at the top level of the curly braces.
@@ -153,17 +165,17 @@ impl Parse for DefStmt {
         if let Some(token) = input.peek() {
             if let T::Keyword(keyword) = token.ty {
                 match keyword {
-                    K::Class => Ok(Self::Class(ClassDef::parse(input)?)),
+                    K::Class => ClassDef::parse(input).map(Self::Class),
                     K::Foreign => todo!("foreign class definition statement"),
                     K::Import => todo!("import definition statement"),
-                    K::Var => todo!("var definition statement"),
+                    K::Var => Self::parse_stmt::<VarDef>(input).map(Self::Var),
                     _ => Err(SyntaxError {
                         msg: "unexpected keyword".to_string(),
                     }
                     .into()),
                 }
             } else {
-                Ok(Self::Simple(SimpleStmt::parse(input)?))
+                SimpleStmt::parse(input).map(Self::Simple)
             }
         } else {
             Err(SyntaxError {
@@ -171,6 +183,25 @@ impl Parse for DefStmt {
             }
             .into())
         }
+    }
+}
+
+impl DefStmt {
+    fn parse_stmt<T: Parse>(input: &mut TokenStream) -> ParseResult<T> {
+        let stmt_result = T::parse(input);
+
+        // Consume trailing comments on the same line.
+        //
+        // TODO: In future store the comment in the statement as syntax trivia.
+        Comment::ignore(input);
+
+        // Consume trailing new line so they don't
+        // show up as empty statements.
+        //
+        // TODO: In future store the new line, optionally trailing comments, in statement as syntax trivia.
+        input.match_token(TokenType::Newline);
+
+        stmt_result
     }
 }
 
@@ -538,6 +569,29 @@ impl Method {
 
         Ok(BlockBody::Stmts(stmts))
         // todo!()
+    }
+}
+
+impl Parse for VarDef {
+    fn parse(input: &mut TokenStream) -> ParseResult<Self> {
+        println!("VarDef::parse");
+
+        input.consume(TokenType::Keyword(KeywordType::Var))?;
+
+        let name = input.consume(TokenType::Ident)?;
+        let rhs = if input.match_token(TokenType::Eq) {
+            // Variable declaration with an assignment.
+            Some(Expr::parse(input)?)
+        } else {
+            None
+        };
+
+        Ok(VarDef {
+            ident: name.ident.ok_or_else(|| SyntaxError {
+                msg: "variable token has no identifier".to_string(),
+            })?,
+            rhs,
+        })
     }
 }
 
