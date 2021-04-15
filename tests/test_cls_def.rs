@@ -70,6 +70,8 @@ fn test_class_docstring() {
         construct new(value) {
             // Comment in function
             _value = value
+
+            var foobar = value + _value + 2
         }
     }
     "#,
